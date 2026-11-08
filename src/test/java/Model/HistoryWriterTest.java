@@ -6,8 +6,11 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 
+import static Model.HistoryWriter.formatRecordForSaving;
 import static Model.HistoryWriter.nextGameID;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -90,5 +93,33 @@ public class HistoryWriterTest {
         var id = nextGameID(records);
 
         assertEquals(6, id);
+    }
+
+    @Test
+    void returnsCorrectFourPlayerFormat() {
+        var expected = "1,hard,19/10/2026; 12:01:00,Mor,Noy,Safa,Muhammed,01:05:04\n";
+
+        var record = new GameRecord(1, Difficulty.HARD,
+                LocalDateTime.of(2026, 10, 19, 12, 1, 0),
+                List.of("Mor", "Noy", "Safa", "Muhammed"),
+                Duration.ofSeconds(1 * 3600 + 5 * 60 + 4));
+
+        var actual = formatRecordForSaving(record);
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    void returnsCorrectTwoPlayerFormat() {
+        var expected = "1,hard,19/10/2026; 12:01:00,Mor,Noy,,,00:00:00\n";
+
+        var record = new GameRecord(1, Difficulty.HARD,
+                LocalDateTime.of(2026, 10, 19, 12, 1, 0),
+                List.of("Mor", "Noy"),
+                Duration.ofSeconds(0));
+
+        var actual = formatRecordForSaving(record);
+
+        assertEquals(expected, actual);
     }
 }

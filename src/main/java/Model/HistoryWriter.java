@@ -3,7 +3,9 @@ package Model;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Appends a completed game to the history CSV.
@@ -14,6 +16,8 @@ public class HistoryWriter {
             + "timestamp(DD/MM/YYYY; HH:MM:SS),"
             + "1st_place_name,2nd_place_name,3rd_place_name,4rd_place_name,"
             + "game_duration(HH:MM:SS)";
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy; HH:mm:ss"); // Format the timestamp as dd/MM/yyyy; HH:mm:ss
+    private static final int NUM_PLACE_COLUMNS = 4; // Maximum number of place columns to pad the ranked names
 
     private final Path path; // the path to the history csv file
 
@@ -30,6 +34,34 @@ public class HistoryWriter {
             Files.createDirectories(path.getParent());
             Files.writeString(path, HEADER + "\n");
         }
+    }
+
+    public String saveRecord(GameRecord record) throws IOException {
+        return "";
+    }
+
+    /**
+     * Formats a game record as a single CSV line for saving to the history file.
+     * The record includes the game ID, difficulty in lowercase, formatted start time,
+     * ranked player names padded to four place columns, and duration formatted as hours,
+     * minutes, and seconds.
+     *
+     * @param record the game record to format for saving
+     * @return the formatted CSV line ending with a newline character
+     */
+    static String formatRecordForSaving(GameRecord record) {
+        var commas = ",".repeat(NUM_PLACE_COLUMNS - record.rankedNames().size()); // Pad the ranked names with commas
+
+        var id = record.gameID();
+        var difficulty = record.difficulty().name().toLowerCase(Locale.ROOT);
+        var startTime = record.startTime().format(TIMESTAMP_FORMATTER);
+        var names = String.join(",", record.rankedNames()) + commas;
+        var duration = String.format("%02d:%02d:%02d", record.duration().toHours(),
+                record.duration().toMinutesPart(),
+                record.duration().toSecondsPart());
+
+
+        return id + "," + difficulty + "," + startTime + "," + names + "," + duration + "\n";
     }
 
     // Package-private to allow access to tests in the same package.
