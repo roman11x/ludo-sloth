@@ -1,13 +1,16 @@
 package Model;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 
 /**
- * Fixed square definitions in the global 19x19 coordinate system.
+ * Per-game board with fixed square definitions and changing piece occupancy.
  * Every coordinate has a Square with a separate activity status.
- * Player routes and changing piece occupancy are maintained separately.
+ * Coordinates use the global 19x19 matrix; player routes are maintained separately.
  */
 public final class Board {
     public static final int STORAGE_SIZE = 19;
@@ -144,6 +147,59 @@ public final class Board {
     public boolean isActive(Position position) {
         return isWithinBounds(position)
                 && squareAt(position).status() == SquareStatus.ACTIVE;
+    }
+
+    public List<Piece> piecesAt(Position position) {
+        return squareAt(position).pieces();
+    }
+
+    /** Derived snapshot, not a second stored copy of piece locations. */
+    public Map<Position, List<Piece>> occupancy() {
+        Map<Position, List<Piece>> snapshot = new HashMap<>();
+        for (Square[] row : squares) {
+            for (Square square : row) {
+                List<Piece> pieces = square.pieces();
+                if (!pieces.isEmpty()) snapshot.put(square.position(), pieces);
+            }
+        }
+        return Map.copyOf(snapshot);
+    }
+
+    public boolean hasPieces() {
+        for (Square[] row : squares) {
+            for (Square square : row) {
+                if (!square.pieces().isEmpty()) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Places an unplaced piece on an active square without duplicating it.
+     * Turn, capture, blocking and movement legality are checked separately.
+     */
+    public void placePiece(Piece piece, Position position) {
+        Objects.requireNonNull(piece, "piece");
+        Square destination = squareAt(position);
+        if (destination.status() != SquareStatus.ACTIVE) {
+            throw new IllegalArgumentException("Cannot place a piece on an inactive square");
+        }
+        for (Square[] row : squares) {
+            for (Square square : row) {
+                if (square.pieces().contains(piece)) {
+                    throw new IllegalArgumentException("Piece is already on this board: " + piece);
+                }
+            }
+        }
+        destination.addPiece(piece);
+    }
+
+    /** Removes a piece from the stated square; rejects incorrect source locations. */
+    public void removePiece(Piece piece, Position position) {
+        Objects.requireNonNull(piece, "piece");
+        if (!squareAt(position).removePiece(piece)) {
+            throw new IllegalArgumentException("Piece is not at " + position);
+        }
     }
 
     public Position startFor(PlayerColor color) {
