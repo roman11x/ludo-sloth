@@ -1,9 +1,8 @@
 package View;
 
 import javafx.application.Application;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.Label;
-import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 
 /**
@@ -15,14 +14,19 @@ public class LudoApp extends Application {
     public void start(Stage stage) {
         // Set the window title
         stage.setTitle("Ludo – Team Sloth");
-        // Create a label with the app name as placeholder content
-        Label label = new Label("Ludo – Team Sloth");
-        // Put the label in a layout pane that centers its content
-        StackPane root = new StackPane(label);
-        // Create an 800x600 scene containing the layout pane
-        Scene scene = new Scene(root, 800, 600);
+        // Development only: --dev-setup opens the Setup screen directly instead of the Main Menu
+        boolean devSetup = getParameters().getRaw().contains("--dev-setup");
+        // Build the first screen: the Main Menu, or the Setup screen in development
+        Parent firstScreen = devSetup ? new SetupView().getRoot() : new MainMenuView().getRoot();
+        // Create an 800x600 scene showing the first screen
+        Scene scene = new Scene(firstScreen, 800, 600);
+        // Apply the shared look (white background, chunky square buttons)
+        scene.getStylesheets().add(getClass().getResource("/View/ludo.css").toExternalForm());
         // Attach the scene to the window
         stage.setScene(scene);
+        // Never let the window shrink below the size the menu needs, so nothing is cut off
+        stage.setMinWidth(500);
+        stage.setMinHeight(480);
         // Show the window
         stage.show();
     }

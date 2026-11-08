@@ -1,0 +1,217 @@
+/* Shared Iteration 1 look: white background, chunky square buttons, neutral colours only.
+   Red, green, yellow and blue are reserved for the players, so the UI chrome never uses them. */
+
+.ludo-root {
+    -fx-background-color: white;
+    -fx-padding: 32;
+}
+
+.ludo-title {
+    -fx-font-size: 64px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+.ludo-subtitle {
+    -fx-font-size: 24px;
+    -fx-text-fill: #333333;
+}
+
+/* Layers: focus ring, white gap, button fill. The ring is transparent until the button has focus. */
+.ludo-button {
+    -ludo-ring: transparent;
+    -ludo-fill: white;
+    -fx-background-color: -ludo-ring, white, -ludo-fill;
+    -fx-background-insets: -8, -5, 0;
+    -fx-background-radius: 0;
+    -fx-border-color: #1a1a1a;
+    -fx-border-width: 3;
+    -fx-border-radius: 0;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+}
+
+.ludo-button:focused {
+    -ludo-ring: #1a1a1a;
+}
+
+.ludo-button:armed {
+    -fx-translate-y: 2;
+}
+
+.ludo-button-primary {
+    -ludo-fill: #1a1a1a;
+    -fx-text-fill: white;
+    -fx-font-size: 24px;
+    -fx-pref-width: 340;
+    -fx-pref-height: 76;
+}
+
+.ludo-button-primary:hover {
+    -ludo-fill: #454545;
+}
+
+.ludo-button-primary:armed {
+    -ludo-fill: #000000;
+}
+
+.ludo-button-secondary {
+    -ludo-fill: white;
+    -fx-text-fill: #1a1a1a;
+    -fx-font-size: 20px;
+    -fx-pref-width: 340;
+    -fx-pref-height: 60;
+}
+
+.ludo-button-secondary:hover {
+    -ludo-fill: #e6e6e6;
+}
+
+.ludo-button-secondary:armed {
+    -ludo-fill: #c8c8c8;
+}
+
+/* ---------- Game Setup screen ---------- */
+
+/* Built-in controls (radios, text fields) use dark grey instead of their default blue focus and accent. */
+.ludo-setup {
+    -fx-focus-color: #1a1a1a;
+    -fx-faint-focus-color: transparent;
+    -fx-accent: #1a1a1a;
+}
+
+.ludo-setup-scroll,
+.ludo-setup-scroll > .viewport {
+    -fx-background-color: white;
+    -fx-background: white;
+}
+
+.ludo-setup-scroll {
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+.ludo-setup-page {
+    -fx-padding: 20 24 20 24;
+}
+
+.ludo-screen-title {
+    -fx-font-size: 36px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+.ludo-section-label {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+.ludo-player-label {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+.ludo-hint {
+    -fx-font-size: 13px;
+    -fx-text-fill: #4a4a4a;
+}
+
+.ludo-radio {
+    -fx-font-size: 15px;
+    -fx-text-fill: #1a1a1a;
+    -fx-cursor: hand;
+}
+
+/* Layers: dark frame, white inside. When focused, an outer ring appears with a white gap, like the buttons. */
+.ludo-text-field {
+    -fx-background-color: #1a1a1a, white;
+    -fx-background-insets: 0, 2;
+    -fx-background-radius: 0;
+    -fx-font-size: 14px;
+    -fx-padding: 6 8 6 8;
+    -fx-prompt-text-fill: #6b6b6b;
+}
+
+.ludo-text-field:focused {
+    -fx-background-color: #1a1a1a, white, #1a1a1a, white;
+    -fx-background-insets: -5, -3, 0, 2;
+}
+
+/* Colour option: circle above the colour name.
+   Layers: focus ring, white gap, selection frame, fill. Ring and frame are transparent until needed. */
+.colour-option {
+    -ludo-ring: transparent;
+    -ludo-frame: transparent;
+    -ludo-fill: white;
+    -fx-background-color: -ludo-ring, white, -ludo-frame, -ludo-fill;
+    -fx-background-insets: -5, -3, 0, 3;
+    -fx-background-radius: 0;
+    -fx-border-color: #9e9e9e;
+    -fx-border-width: 1;
+    -fx-border-radius: 0;
+    -fx-padding: 6 4 6 4;
+    -fx-min-width: 56;
+    -fx-pref-width: 56;
+    -fx-content-display: top;
+    -fx-graphic-text-gap: 3;
+    -fx-font-size: 12px;
+    -fx-text-fill: #1a1a1a;
+    -fx-cursor: hand;
+}
+
+.colour-option:hover {
+    -ludo-fill: #eeeeee;
+}
+
+.colour-option:selected {
+    -ludo-frame: #1a1a1a;
+    -fx-border-color: #1a1a1a;
+    -fx-font-weight: bold;
+}
+
+.colour-option:focused {
+    -ludo-ring: #1a1a1a;
+}
+
+.colour-option:disabled {
+    -fx-opacity: 0.35;
+}
+
+.colour-option:disabled .text {
+    -fx-strikethrough: true;
+}
+
+/* Player colours: plain solid circles with a thin dark outline so yellow stays visible on white. */
+.player-circle {
+    -fx-stroke: #1a1a1a;
+    -fx-stroke-width: 1.5;
+}
+
+.player-red {
+    -fx-fill: #d32f2f;
+}
+
+.player-green {
+    -fx-fill: #2e7d32;
+}
+
+.player-yellow {
+    -fx-fill: #fbc02d;
+}
+
+.player-blue {
+    -fx-fill: #1565c0;
+}
+
+.ludo-summary {
+    -fx-border-color: #1a1a1a;
+    -fx-border-width: 2;
+    -fx-padding: 12;
+}
+
+.ludo-summary-text {
+    -fx-font-size: 14px;
+    -fx-text-fill: #1a1a1a;
+}
