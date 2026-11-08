@@ -67,6 +67,7 @@
                 <version>0.0.8</version> <!-- latest release -->
                 <configuration>
                     <mainClass>View.Main</mainClass> <!-- class to start; must match the launcher you create -->
+                    <runtimePathOption>CLASSPATH</runtimePathOption> <!-- classpath, like the fat JAR: JavaFX picks this OS's natives itself instead of the first javafx-graphics jar on the module path -->
                 </configuration>
             </plugin>
             <plugin>

@@ -1,5 +1,7 @@
 package View;
 
+import java.util.List;
+
 import javafx.application.Application;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -14,10 +16,30 @@ public class LudoApp extends Application {
     public void start(Stage stage) {
         // Set the window title
         stage.setTitle("Ludo – Team Sloth");
-        // Development only: --dev-setup opens the Setup screen directly instead of the Main Menu
-        boolean devSetup = getParameters().getRaw().contains("--dev-setup");
-        // Build the first screen: the Main Menu, or the Setup screen in development
-        Parent firstScreen = devSetup ? new SetupView().getRoot() : new MainMenuView().getRoot();
+        // Development only: --dev-setup, --dev-board, --dev-results, --dev-results-save-error,
+        // --dev-history or --dev-history-empty opens that screen directly instead of the Main Menu
+        List<String> launchArgs = getParameters().getRaw();
+        // Build the first screen: the Main Menu, or a screen picked for development
+        Parent firstScreen;
+        if (launchArgs.contains("--dev-history-empty")) {
+            HistoryView history = new HistoryView();
+            history.showNoGames();
+            firstScreen = history.getRoot();
+        } else if (launchArgs.contains("--dev-history")) {
+            firstScreen = new HistoryView().getRoot();
+        } else if (launchArgs.contains("--dev-results-save-error")) {
+            ResultsView results = new ResultsView();
+            results.setSaveStatus(false);
+            firstScreen = results.getRoot();
+        } else if (launchArgs.contains("--dev-results")) {
+            firstScreen = new ResultsView().getRoot();
+        } else if (launchArgs.contains("--dev-board")) {
+            firstScreen = new BoardView().getRoot();
+        } else if (launchArgs.contains("--dev-setup")) {
+            firstScreen = new SetupView().getRoot();
+        } else {
+            firstScreen = new MainMenuView().getRoot();
+        }
         // Create an 800x600 scene showing the first screen
         Scene scene = new Scene(firstScreen, 800, 600);
         // Apply the shared look (white background, chunky square buttons)
