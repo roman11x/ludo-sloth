@@ -20,6 +20,7 @@ public final class Game {
     private final MoveGenerator moveGenerator;
     private final MoveRules moveRules = new MoveRules();
     private List<MoveCandidate> legalMoves = List.of();
+    private final List<Player> ranking = new ArrayList<>();
 
     public Game(List<Player> players) {
         this(players, new StandardDie(), new Random(), new Random());
@@ -105,7 +106,8 @@ public final class Game {
      */
     public MoveCandidate play(Piece piece) {
         Objects.requireNonNull(piece, "piece");
-        PlayerColor player = turnManager.currentPlayer().color();
+        Player activePlayer = turnManager.currentPlayer();
+        PlayerColor player = activePlayer.color();
         turnManager.requireCanMove(player, piece);
         MoveCandidate move = legalMoves.stream()
                 .filter(candidate -> candidate.piece().equals(piece))
@@ -118,7 +120,18 @@ public final class Game {
         }
         applyMove(move);
         legalMoves = List.of();
-        turnManager.completeTurn(player);
+        boolean playerFinished = hasFinished(activePlayer);
+        if (playerFinished && !ranking.contains(activePlayer)) {
+            ranking.add(activePlayer);
+        }
+        turnManager.completeTurn(player, playerFinished);
+        if (isFinished()) {
+            // The remaining participant is last, without moving their pieces
+            // or claiming that all four of them reached Finish.
+            Player last = players.stream().filter(participant -> !ranking.contains(participant))
+                    .findFirst().orElseThrow();
+            ranking.add(last);
+        }
         return move;
     }
 
@@ -150,6 +163,25 @@ public final class Game {
                 .filter(position -> board.piecesAt(position).isEmpty())
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("No empty Castle slot for " + color));
+    }
+
+    /** Derives completion from board occupancy rather than a second piece-state flag. */
+    public boolean hasFinished(Player player) {
+        Objects.requireNonNull(player, "player");
+        if (!players.contains(player)) {
+            throw new IllegalArgumentException("Player does not participate in this game");
+        }
+        Position finish = routes.get(player.color()).finish();
+        return board.piecesAt(finish).containsAll(player.pieces());
+    }
+
+    public boolean isFinished() {
+        return turnManager.phase() == TurnPhase.GAME_OVER;
+    }
+
+    /** Finish order so far; once over, also includes the last unfinished participant. */
+    public List<Player> ranking() {
+        return List.copyOf(ranking);
     }
 
     /** Read-only choices from the most recent roll, empty initially or with no move. */

@@ -1,6 +1,7 @@
 package Model;
 
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
@@ -16,6 +17,7 @@ public final class TurnManager {
             PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE, PlayerColor.RED);
     private final List<Player> players;
     private final Die standardDie;
+    private final EnumSet<PlayerColor> finishedPlayers = EnumSet.noneOf(PlayerColor.class);
     private int activeIndex;
     private TurnPhase phase = TurnPhase.WAITING_FOR_ROLL;
     private int lastRoll;
@@ -45,7 +47,11 @@ public final class TurnManager {
         return players;
     }
 
+    /** No player is active once the game is over. */
     public Player currentPlayer() {
+        if (phase == TurnPhase.GAME_OVER) {
+            throw new IllegalStateException("The game is over; there is no active player");
+        }
         return players.get(activeIndex);
     }
 
@@ -54,7 +60,8 @@ public final class TurnManager {
     }
 
     public boolean isActive(PlayerColor player) {
-        return currentPlayer().color() == Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(player, "player");
+        return phase != TurnPhase.GAME_OVER && currentPlayer().color() == player;
     }
 
     public void requireActivePlayer(PlayerColor player) {
@@ -99,9 +106,27 @@ public final class TurnManager {
      * The caller verifies that condition; this method manages the transition.
      */
     public void completeTurn(PlayerColor player) {
+        completeTurn(player, false);
+    }
+
+    /**
+     * Game reports completion only after verifying all four pieces at Finish.
+     * A finishing player never gets an extra turn, even after a six. With only
+     * one unfinished participant left, freeze turn actions instead of advancing.
+     */
+    public void completeTurn(PlayerColor player, boolean playerFinished) {
         requireActivePlayer(player);
         requirePhase(TurnPhase.WAITING_FOR_MOVE);
-        if (lastRoll == 6) {
+        if (playerFinished) {
+            finishedPlayers.add(player);
+            if (finishedPlayers.size() == players.size() - 1) {
+                phase = TurnPhase.GAME_OVER;
+                lastRoll = 0;
+                consecutiveSixes = 0;
+            } else {
+                advancePlayer();
+            }
+        } else if (lastRoll == 6) {
             lastRoll = 0;
             phase = TurnPhase.WAITING_FOR_ROLL;
         } else {
@@ -116,7 +141,9 @@ public final class TurnManager {
     }
 
     private void advancePlayer() {
-        activeIndex = (activeIndex + 1) % players.size();
+        do {
+            activeIndex = (activeIndex + 1) % players.size();
+        } while (finishedPlayers.contains(players.get(activeIndex).color()));
         phase = TurnPhase.WAITING_FOR_ROLL;
         lastRoll = 0;
         consecutiveSixes = 0;
