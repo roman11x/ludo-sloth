@@ -39,12 +39,6 @@ public final class Board {
         board.defineEasyStartsAndArrows();
         board.defineEasyHomesAndCastles();
         board.placeEasyProtectedSquares(random);
-
-        // Activate the four inner corners without changing the existing random layout.
-        board.defineSquare(8, 8, SquareType.NORMAL, SquareColor.NEUTRAL, SquareStatus.ACTIVE);
-        board.defineSquare(8, 10, SquareType.NORMAL, SquareColor.NEUTRAL, SquareStatus.ACTIVE);
-        board.defineSquare(10, 8, SquareType.NORMAL, SquareColor.NEUTRAL, SquareStatus.ACTIVE);
-        board.defineSquare(10, 10, SquareType.NORMAL, SquareColor.NEUTRAL, SquareStatus.ACTIVE);
         return board;
     }
 

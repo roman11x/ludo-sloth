@@ -32,14 +32,13 @@ public final class PlayerRouteFactory {
     }
 
     private static List<Position> greenEasyCoordinates() {
-        // The approved complete route, including all four non-diagonal inner corners.
+        // The 57-coordinate route: inner corners connect directly in one diagonal step.
         return List.of(
                 new Position(8, 3),
                 new Position(8, 4),
                 new Position(8, 5),
                 new Position(8, 6),
                 new Position(8, 7),
-                new Position(8, 8),
                 new Position(7, 8),
                 new Position(6, 8),
                 new Position(5, 8),
@@ -53,7 +52,6 @@ public final class PlayerRouteFactory {
                 new Position(5, 10),
                 new Position(6, 10),
                 new Position(7, 10),
-                new Position(8, 10),
                 new Position(8, 11),
                 new Position(8, 12),
                 new Position(8, 13),
@@ -67,7 +65,6 @@ public final class PlayerRouteFactory {
                 new Position(10, 13),
                 new Position(10, 12),
                 new Position(10, 11),
-                new Position(10, 10),
                 new Position(11, 10),
                 new Position(12, 10),
                 new Position(13, 10),
@@ -81,7 +78,6 @@ public final class PlayerRouteFactory {
                 new Position(13, 8),
                 new Position(12, 8),
                 new Position(11, 8),
-                new Position(10, 8),
                 new Position(10, 7),
                 new Position(10, 6),
                 new Position(10, 5),
