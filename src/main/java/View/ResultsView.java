@@ -31,6 +31,8 @@ public class ResultsView {
 
     private final ScrollPane root;
     private final HBox saveStatus = new HBox(10);
+    private final Button menuButton;
+    private final Button newGameButton;
 
     public ResultsView() {
         // Title and winner line
@@ -55,9 +57,9 @@ public class ResultsView {
         setSaveStatus(true);
 
         // Secondary action on the left, primary action on the right
-        Button menuButton = new Button("Main Menu");
+        menuButton = new Button("Main Menu");
         menuButton.getStyleClass().addAll("ludo-button", "ludo-button-secondary");
-        Button newGameButton = new Button("New Game");
+        newGameButton = new Button("New Game");
         newGameButton.getStyleClass().addAll("ludo-button", "ludo-button-primary");
         // Start keyboard focus on the primary action once the screen is shown
         newGameButton.sceneProperty().addListener((obs, oldScene, newScene) -> {
@@ -89,6 +91,20 @@ public class ResultsView {
      */
     public Parent getRoot() {
         return root;
+    }
+
+    /**
+     * Sets what happens when "Main Menu" is pressed. {@code null} means nothing happens.
+     */
+    public void setOnMainMenu(Runnable action) {
+        menuButton.setOnAction(action == null ? null : event -> action.run());
+    }
+
+    /**
+     * Sets what happens when "New Game" is pressed. {@code null} means nothing happens.
+     */
+    public void setOnNewGame(Runnable action) {
+        newGameButton.setOnAction(action == null ? null : event -> action.run());
     }
 
     /**

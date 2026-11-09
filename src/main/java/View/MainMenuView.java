@@ -13,6 +13,8 @@ import javafx.scene.layout.VBox;
 public class MainMenuView {
 
     private final StackPane root;
+    private final Button startButton;
+    private final Button historyButton;
 
     public MainMenuView() {
         // Game name with the team name underneath
@@ -24,9 +26,9 @@ public class MainMenuView {
         titleBox.setAlignment(Pos.CENTER);
 
         // Primary action first and largest, secondary action below it
-        Button startButton = new Button("Start New Game");
+        startButton = new Button("Start New Game");
         startButton.getStyleClass().addAll("ludo-button", "ludo-button-primary");
-        Button historyButton = new Button("Game History");
+        historyButton = new Button("Game History");
         historyButton.getStyleClass().addAll("ludo-button", "ludo-button-secondary");
         VBox buttons = new VBox(24, startButton, historyButton);
         buttons.setAlignment(Pos.CENTER);
@@ -43,5 +45,19 @@ public class MainMenuView {
      */
     public Parent getRoot() {
         return root;
+    }
+
+    /**
+     * Sets what happens when "Start New Game" is pressed. {@code null} means nothing happens.
+     */
+    public void setOnStartNewGame(Runnable action) {
+        startButton.setOnAction(action == null ? null : event -> action.run());
+    }
+
+    /**
+     * Sets what happens when "Game History" is pressed. {@code null} means nothing happens.
+     */
+    public void setOnGameHistory(Runnable action) {
+        historyButton.setOnAction(action == null ? null : event -> action.run());
     }
 }

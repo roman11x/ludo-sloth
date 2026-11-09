@@ -37,6 +37,8 @@ public class SetupView {
     private final ScrollPane root;
     private final List<PlayerRow> rows = new ArrayList<>();
     private final VBox summaryLines = new VBox(8);
+    private final Button backButton;
+    private final Button startButton;
     private int playerCount = MAX_PLAYERS;
 
     public SetupView() {
@@ -52,9 +54,9 @@ public class SetupView {
         HBox middle = new HBox(24, form, buildSummary());
 
         // Secondary action on the left, primary action on the right
-        Button backButton = new Button("Back to Main Menu");
+        backButton = new Button("Back to Main Menu");
         backButton.getStyleClass().addAll("ludo-button", "ludo-button-secondary");
-        Button startButton = new Button("Start Game");
+        startButton = new Button("Start Game");
         startButton.getStyleClass().addAll("ludo-button", "ludo-button-primary");
         HBox buttons = new HBox(24, backButton, startButton);
         buttons.setAlignment(Pos.CENTER);
@@ -84,6 +86,55 @@ public class SetupView {
      */
     public Parent getRoot() {
         return root;
+    }
+
+    /**
+     * Sets what happens when "Back to Main Menu" is pressed. {@code null} means nothing happens.
+     */
+    public void setOnBack(Runnable action) {
+        backButton.setOnAction(action == null ? null : event -> action.run());
+    }
+
+    /**
+     * Sets what happens when "Start Game" is pressed. {@code null} means nothing happens.
+     */
+    public void setOnStartGame(Runnable action) {
+        startButton.setOnAction(action == null ? null : event -> action.run());
+    }
+
+    /**
+     * Returns the selected number of players (2, 3 or 4).
+     */
+    public int getPlayerCount() {
+        return playerCount;
+    }
+
+    /**
+     * Returns each player's name exactly as typed (possibly empty), Player 1 first.
+     * The list has {@link #getPlayerCount()} entries and cannot be modified.
+     */
+    public List<String> getPlayerNames() {
+        List<String> names = new ArrayList<>();
+        for (PlayerRow row : rows) {
+            if (row.isShown()) {
+                names.add(row.nameField.getText());
+            }
+        }
+        return List.copyOf(names);
+    }
+
+    /**
+     * Returns each player's chosen colour as "Red", "Green", "Yellow" or "Blue", Player 1 first,
+     * in the same order as {@link #getPlayerNames()}. The list cannot be modified.
+     */
+    public List<String> getPlayerColours() {
+        List<String> colours = new ArrayList<>();
+        for (PlayerRow row : rows) {
+            if (row.isShown()) {
+                colours.add(COLOUR_NAMES[row.selectedColour()]);
+            }
+        }
+        return List.copyOf(colours);
     }
 
     private HBox buildPlayerCountRow() {

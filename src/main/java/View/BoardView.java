@@ -36,17 +36,19 @@ public class BoardView {
     private static final double SIDE_WIDTH = 250;
     private static final int HOME_PATH_LENGTH = 6;
 
-    // Index order everywhere: Red, Green, Yellow, Blue (corners clockwise from top-left)
+    // Index order everywhere: Red, Green, Yellow, Blue.
+    // Corners as in the Model and the board diagram: Green top-left, Yellow top-right,
+    // Blue bottom-right, Red bottom-left.
     private static final String[] COLOURS = {"red", "green", "yellow", "blue"};
     private static final String[] COLOUR_NAMES = {"Red", "Green", "Yellow", "Blue"};
-    private static final int[][] CASTLE_ORIGINS = {{0, 0}, {0, 9}, {9, 9}, {9, 0}};
+    private static final int[][] CASTLE_ORIGINS = {{9, 0}, {0, 0}, {0, 9}, {9, 9}};
     // Outermost centre-line square of each colour's Finish arm; first square of its Home Path
-    private static final int[][] ARROW_SQUARES = {{7, 0}, {0, 7}, {7, 14}, {14, 7}};
+    private static final int[][] ARROW_SQUARES = {{14, 7}, {7, 0}, {0, 7}, {7, 14}};
     // Step from each Arrow Square towards the Finish, and the matching arrow rotation
-    private static final int[][] HOME_DIRECTIONS = {{0, 1}, {1, 0}, {0, -1}, {-1, 0}};
-    private static final double[] ARROW_ROTATIONS = {0, 90, 180, -90};
+    private static final int[][] HOME_DIRECTIONS = {{-1, 0}, {0, 1}, {1, 0}, {0, -1}};
+    private static final double[] ARROW_ROTATIONS = {-90, 0, 90, 180};
     // Two clockwise steps after each Arrow Square
-    private static final int[][] START_SQUARES = {{6, 1}, {1, 8}, {8, 13}, {13, 6}};
+    private static final int[][] START_SQUARES = {{13, 6}, {6, 1}, {1, 8}, {8, 13}};
 
     // Sample game shown until GameController supplies the real one
     private static final String[] SAMPLE_NAMES = {"Maya", "Daniel", "Noa", "Omer"};
@@ -56,6 +58,7 @@ public class BoardView {
     private static final String SAMPLE_MESSAGE = "Roll the die to start your turn.";
 
     private final StackPane root;
+    private final DiceView diceView = new DiceView();
 
     public BoardView() {
         // Whose turn it is on the left, elapsed time on the right
@@ -82,7 +85,7 @@ public class BoardView {
         message.setWrapText(true);
         VBox messageBox = new VBox(6, text("Messages", "ludo-section-label"), message);
         messageBox.getStyleClass().add("ludo-panel");
-        VBox side = new VBox(16, new DiceView().getRoot(), messageBox);
+        VBox side = new VBox(16, diceView.getRoot(), messageBox);
         side.setMinWidth(SIDE_WIDTH);
         side.setPrefWidth(SIDE_WIDTH);
         side.setMaxWidth(SIDE_WIDTH);
@@ -107,6 +110,13 @@ public class BoardView {
      */
     public Parent getRoot() {
         return root;
+    }
+
+    /**
+     * Returns the dice area shown beside the board, so a controller can attach the roll action.
+     */
+    public DiceView getDiceView() {
+        return diceView;
     }
 
     /**
@@ -274,10 +284,10 @@ public class BoardView {
         double high = 9 * CELL;
         double mid = BOARD_SIZE / 2;
         double[][] triangles = {
+                {low, high, high, high, mid, mid},
                 {low, low, low, high, mid, mid},
                 {low, low, high, low, mid, mid},
-                {high, low, high, high, mid, mid},
-                {low, high, high, high, mid, mid}};
+                {high, low, high, high, mid, mid}};
         for (int colour = 0; colour < COLOURS.length; colour++) {
             Polygon triangle = new Polygon(triangles[colour]);
             triangle.getStyleClass().addAll("board-finish", "player-" + COLOURS[colour]);

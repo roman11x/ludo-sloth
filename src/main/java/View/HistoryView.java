@@ -42,6 +42,7 @@ public class HistoryView {
     private final StackPane root;
     private final StackPane listArea;
     private final TableView<GameRow> table = new TableView<>();
+    private final Button backButton;
 
     public HistoryView() {
         Label title = new Label("Game History");
@@ -67,7 +68,7 @@ public class HistoryView {
         table.getItems().setAll(SAMPLE_GAMES);
         listArea = new StackPane(table);
 
-        Button backButton = new Button("Back to Main Menu");
+        backButton = new Button("Back to Main Menu");
         backButton.getStyleClass().addAll("ludo-button", "ludo-button-secondary");
         backButton.setMinHeight(Region.USE_PREF_SIZE);
 
@@ -86,6 +87,13 @@ public class HistoryView {
      */
     public Parent getRoot() {
         return root;
+    }
+
+    /**
+     * Sets what happens when "Back to Main Menu" is pressed. {@code null} means nothing happens.
+     */
+    public void setOnBack(Runnable action) {
+        backButton.setOnAction(action == null ? null : event -> action.run());
     }
 
     /**
