@@ -516,3 +516,47 @@
     -fx-text-fill: #1a1a1a;
     -fx-text-alignment: center;
 }
+
+/* ---------- Error messages (Setup validation, History file error) ---------- */
+
+/* Layers: focus ring, white gap, dark frame, white inside. The ring shows when focus moves here. */
+.setup-messages {
+    -fx-background-color: #1a1a1a, white;
+    -fx-background-insets: 0, 3;
+    -fx-padding: 6 12 6 12;
+}
+
+/* Tighter page padding while validation messages are shown, so the messages fit without scrolling. */
+.ludo-setup-page.setup-page-with-messages {
+    -fx-padding: 8 24 8 24;
+}
+
+.setup-messages:focused {
+    -fx-background-color: #1a1a1a, white, #1a1a1a, white;
+    -fx-background-insets: -6, -3, 0, 3;
+}
+
+.setup-message-text {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+.history-error {
+    -fx-background-color: white;
+    -fx-border-color: #1a1a1a;
+    -fx-border-width: 4;
+    -fx-padding: 16;
+    -fx-min-height: 160;
+}
+
+.history-error-heading {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+.history-error-text {
+    -fx-font-size: 15px;
+    -fx-text-fill: #1a1a1a;
+}

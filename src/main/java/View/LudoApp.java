@@ -16,12 +16,24 @@ public class LudoApp extends Application {
     public void start(Stage stage) {
         // Set the window title
         stage.setTitle("Ludo – Team Sloth");
-        // Development only: --dev-setup, --dev-board, --dev-results, --dev-results-save-error,
-        // --dev-history or --dev-history-empty opens that screen directly instead of the Main Menu
+        // Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-results,
+        // --dev-results-save-error, --dev-history, --dev-history-empty or --dev-history-error
+        // opens that screen directly instead of the Main Menu
         List<String> launchArgs = getParameters().getRaw();
         // Build the first screen: the Main Menu, or a screen picked for development
         Parent firstScreen;
-        if (launchArgs.contains("--dev-history-empty")) {
+        if (launchArgs.contains("--dev-history-error")) {
+            HistoryView history = new HistoryView();
+            history.showLoadError("Line 4 of the history file cannot be read: "
+                    + "the difficulty \"expert\" is not Easy, Medium or Hard.");
+            firstScreen = history.getRoot();
+        } else if (launchArgs.contains("--dev-setup-errors")) {
+            SetupView setup = new SetupView();
+            setup.showValidationMessages(List.of(
+                    "Please use unique player names: \"Maya\" is used twice.",
+                    "Please enter a name for Player 2."));
+            firstScreen = setup.getRoot();
+        } else if (launchArgs.contains("--dev-history-empty")) {
             HistoryView history = new HistoryView();
             history.showNoGames();
             firstScreen = history.getRoot();
