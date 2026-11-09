@@ -196,6 +196,25 @@ public final class Board {
         }
     }
 
+    /**
+     * Relocates occupancy after the caller has validated movement rules.
+     * Destination validation happens before removing the source piece, so a
+     * rejected relocation leaves occupancy unchanged. No capture is performed.
+     */
+    public void movePiece(Piece piece, Position from, Position to) {
+        Objects.requireNonNull(piece, "piece");
+        Square source = squareAt(from);
+        Square destination = squareAt(to);
+        if (!source.pieces().contains(piece)) {
+            throw new IllegalArgumentException("Piece is not at " + from);
+        }
+        if (from.equals(to) || destination.status() != SquareStatus.ACTIVE) {
+            throw new IllegalArgumentException("Destination must be a different active square");
+        }
+        destination.addPiece(piece);
+        source.removePiece(piece);
+    }
+
     public Position startFor(PlayerColor color) {
         return findPosition(SquareType.START, color);
     }

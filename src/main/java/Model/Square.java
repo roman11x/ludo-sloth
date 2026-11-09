@@ -44,7 +44,14 @@ public final class Square {
 
     // Package-private operations used by Board after checking the placement.
     void addPiece(Piece piece) {
-        pieces.add(Objects.requireNonNull(piece, "piece"));
+        Objects.requireNonNull(piece, "piece");
+        if (pieces.contains(piece)) {
+            throw new IllegalArgumentException("Piece is already on this square");
+        }
+        if (pieces.stream().filter(p -> p.color() == piece.color()).count() >= 4) {
+            throw new IllegalArgumentException("At most four pieces of one color per square");
+        }
+        pieces.add(piece);
     }
 
     boolean removePiece(Piece piece) {
