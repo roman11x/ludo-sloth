@@ -12,7 +12,7 @@ class BoardTest {
     private final Board board = Board.createEasy(new Random(42));
 
     @Test
-    void all361CoordinatesContainMatchingSquaresIncluding265InactiveCells() {
+    void all361CoordinatesContainMatchingSquaresIncluding269InactiveCells() {
         int inactive = 0;
         for (int row = 0; row < 19; row++) {
             for (int column = 0; column < 19; column++) {
@@ -39,15 +39,15 @@ class BoardTest {
                 }
             }
         }
-        assertEquals(265, inactive);
-        assertEquals(44, countSquares(SquareType.NORMAL));
+        assertEquals(269, inactive);
+        assertEquals(40, countSquares(SquareType.NORMAL));
         assertEquals(4, countSquares(SquareType.PROTECTED));
         assertEquals(4, countSquares(SquareType.START));
         assertEquals(4, countSquares(SquareType.ARROW));
         assertEquals(20, countSquares(SquareType.HOME_PATH));
         assertEquals(4, countSquares(SquareType.FINISHING));
         assertEquals(144, countSquares(SquareType.CASTLE));
-        assertEquals(137, countSquares(SquareType.EMPTY));
+        assertEquals(141, countSquares(SquareType.EMPTY));
     }
 
     @Test
@@ -108,7 +108,7 @@ class BoardTest {
     }
 
     @Test
-    void preservesExactlyThe56SharedCoordinatesAcrossRandomLayouts() {
+    void preservesExactlyThe52SharedCoordinatesAcrossRandomLayouts() {
         for (int seed = 0; seed < 10; seed++) {
             Board layout = Board.createEasy(new Random(seed));
             int shared = 0;
@@ -129,8 +129,7 @@ class BoardTest {
                                     && ((row >= 2 && row <= 7)
                                         || (row >= 11 && row <= 16)))
                             || ((row == 2 || row == 16) && column == 9)
-                            || (row == 9 && (column == 2 || column == 16))
-                            || ((row == 8 || row == 10) && (column == 8 || column == 10));
+                            || (row == 9 && (column == 2 || column == 16));
                     assertEquals(expected, isShared, square.position().toString());
                     if (isShared) shared++;
                     if (square.type() == SquareType.PROTECTED) {
@@ -143,7 +142,7 @@ class BoardTest {
                     }
                 }
             }
-            assertEquals(56, shared);
+            assertEquals(52, shared);
             assertEquals(4, protectedCount);
         }
     }
@@ -152,7 +151,7 @@ class BoardTest {
     void returnsInactiveSquaresButRejectsOutOfBoundsCoordinates() {
         for (Position position : List.of(new Position(0, 0), new Position(2, 2),
                 new Position(2, 16), new Position(16, 2), new Position(16, 16),
-                new Position(9, 9))) {
+                new Position(9, 9), new Position(8, 8), new Position(10, 10))) {
             assertTrue(board.isWithinBounds(position));
             assertFalse(board.isActive(position));
             assertEquals(SquareStatus.INACTIVE, board.squareAt(position).status());
@@ -224,20 +223,6 @@ class BoardTest {
         }
         assertThrows(NullPointerException.class, () -> new Square(
                 new Position(8, 4), SquareType.NORMAL, SquareColor.NEUTRAL, null));
-    }
-
-    @Test
-    void theFourInnerCornersAreNormalNeutralAndActive() {
-        for (int seed = 0; seed < 10; seed++) {
-            Board layout = Board.createEasy(new Random(seed));
-            for (Position position : List.of(new Position(8, 8), new Position(8, 10),
-                    new Position(10, 8), new Position(10, 10))) {
-                Square square = layout.squareAt(position);
-                assertEquals(SquareType.NORMAL, square.type());
-                assertEquals(SquareColor.NEUTRAL, square.associatedColor());
-                assertEquals(SquareStatus.ACTIVE, square.status());
-            }
-        }
     }
 
     private void assertSquare(Position position, SquareType type, SquareColor color) {
