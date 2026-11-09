@@ -2,6 +2,7 @@ package View;
 
 import java.util.List;
 
+import Controller.GameController;
 import javafx.application.Application;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -34,7 +35,10 @@ public class LudoApp extends Application {
         } else if (launchArgs.contains("--dev-results")) {
             firstScreen = new ResultsView().getRoot();
         } else if (launchArgs.contains("--dev-board")) {
-            firstScreen = new BoardView().getRoot();
+            // The board with Roll working through GameController, before Start Game is wired
+            BoardView board = new BoardView();
+            new GameController(board);
+            firstScreen = board.getRoot();
         } else if (launchArgs.contains("--dev-setup")) {
             firstScreen = new SetupView().getRoot();
         } else {

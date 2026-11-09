@@ -17,6 +17,8 @@ public class DiceView {
 
     private final VBox root;
     private final Button rollButton;
+    private final Label resultLabel;
+    private final StackPane resultBox;
     private boolean spaceHeld;
 
     public DiceView() {
@@ -29,9 +31,9 @@ public class DiceView {
         // Result space, empty until the first roll
         Label resultCaption = new Label("Result");
         resultCaption.getStyleClass().add("ludo-hint");
-        Label resultLabel = new Label();
+        resultLabel = new Label();
         resultLabel.getStyleClass().add("dice-result-value");
-        StackPane resultBox = new StackPane(resultLabel);
+        resultBox = new StackPane(resultLabel);
         resultBox.getStyleClass().add("dice-result");
         resultBox.setAccessibleText("Die result: no roll yet");
 
@@ -58,6 +60,15 @@ public class DiceView {
      */
     public void setOnRoll(Runnable action) {
         rollButton.setOnAction(action == null ? null : event -> action.run());
+    }
+
+    /**
+     * Shows the result of the latest roll in the result area, for sighted users and screen readers.
+     */
+    public void showResult(int value) {
+        String text = String.valueOf(value);
+        resultLabel.setText(text);
+        resultBox.setAccessibleText("Die result: " + text);
     }
 
     /**
