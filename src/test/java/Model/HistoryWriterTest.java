@@ -66,7 +66,7 @@ public class HistoryWriterTest {
     }
 
     @Test
-    void returnsOneIfThereAreNoRecords() {
+    void returnsOneIfThereAreNoRecords() throws IOException {
         var headerLine = List.of(HEADER);
 
         var id = nextGameID(headerLine);
@@ -75,7 +75,7 @@ public class HistoryWriterTest {
     }
 
     @Test
-    void  returnsNextIdForSingleRecord() {
+    void returnsNextIdForSingleRecord() throws IOException {
         var records = List.of(HEADER,
                 "5,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00");
 
@@ -85,10 +85,10 @@ public class HistoryWriterTest {
     }
 
     @Test
-    void returnsNextIdFromHighestRecordId() {
+    void returnsNextIdFromHighestRecordId() throws IOException {
         var records = List.of(HEADER,
-                        "2,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00",
-                        "5,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00",
+                "2,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00",
+                "5,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00",
                 "1,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00");
 
         var id = nextGameID(records);
@@ -177,9 +177,9 @@ public class HistoryWriterTest {
     void existingRecordsDoNotGetOverridden(@TempDir Path tempDir) throws IOException {
         Path file = tempDir.resolve("test.csv");
         Files.write(file, List.of(HEADER,
-                "1,easy,01/04/2023; 00:00:00,Mor,Player2,,,00:00:00",
-                "2,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00",
-                "3,hard,19/10/2026; 12:01:00,Mor,Noy,Safa,Muhammed,01:05:04"),
+                        "1,easy,01/04/2023; 00:00:00,Mor,Player2,,,00:00:00",
+                        "2,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00",
+                        "3,hard,19/10/2026; 12:01:00,Mor,Noy,Safa,Muhammed,01:05:04"),
                 StandardOpenOption.CREATE);
 
         var writer = new HistoryWriter(file);
@@ -197,6 +197,61 @@ public class HistoryWriterTest {
                 "4,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00");
 
         assertEquals(expected, actual);
+    }
+
+    @Test
+    void emptyFileIsRejected(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("test.csv");
+        Files.write(file, List.of());
+        List<String> expected = Files.readAllLines(file);
+
+        var writer = new HistoryWriter(file);
+        var e = assertThrows(IOException.class, () -> writer.saveRecord(new GameRecord(GameRecord.UNASSIGNED_ID,
+                Difficulty.MEDIUM,
+                LocalDateTime.of(2026, 11, 7, 15, 57),
+                List.of("Alice", "Bob", "Carol", "Dan"),
+                Duration.ofMinutes(30))));
+        List<String> actual = Files.readAllLines(file);
+
+        assertTrue(e.getMessage().contains("History file is malformed (missing or wrong header): " + file));
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    void wrongHeaderIsRejected(@TempDir Path tempdir) throws  IOException {
+        Path file = tempdir.resolve("test.csv");
+        Files.writeString(file, "wrong header");
+        List<String> expected = Files.readAllLines(file);
+
+        var writer = new HistoryWriter(file);
+        var e = assertThrows(IOException.class, () -> writer.saveRecord(new GameRecord(GameRecord.UNASSIGNED_ID,
+                Difficulty.MEDIUM,
+                LocalDateTime.of(2026, 11, 7, 15, 57),
+                List.of("Alice", "Bob", "Carol", "Dan"),
+                Duration.ofMinutes(30))));
+
+        List<String> actual = Files.readAllLines(file);
+        assertEquals(expected, actual);
+        assertTrue(e.getMessage().contains("History file is malformed (missing or wrong header): " + file));
+    }
+
+    @Test
+    void fileWithInvalidIdIsRejected(@TempDir Path tempdir) throws IOException {
+        Path file = tempdir.resolve("test.csv");
+        String invalidRecord = "abc,easy,01/04/2023; 00:00:00,Mor,Noy,,,00:10:00";
+        Files.write(file, List.of(HEADER, invalidRecord));
+        List<String> expected = Files.readAllLines(file);
+
+        var writer = new HistoryWriter(file);
+        var e = assertThrows(IOException.class, () -> writer.saveRecord(new GameRecord(GameRecord.UNASSIGNED_ID,
+                Difficulty.MEDIUM,
+                LocalDateTime.of(2026, 11, 7, 15, 57),
+                List.of("Alice", "Bob", "Carol", "Dan"),
+                Duration.ofMinutes(30))));
+
+        List<String> actual = Files.readAllLines(file);
+        assertEquals(expected, actual);
+        assertTrue(e.getMessage().contains("History file is malformed (invalid game ID): " + invalidRecord));
     }
 
 

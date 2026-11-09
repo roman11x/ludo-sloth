@@ -38,20 +38,20 @@ public class HistoryWriter {
     }
 
     /**
-     * Saves a new game record to the history file.
-     * The record must not already have an assigned game ID. A new ID is determined
-     * from the existing history entries, assigned to a copy of the record, and the
-     * formatted record is appended to the file. If the history file does not exist,
-     * it is created before writing.
+     * Saves a game record to the history file.
+     * The record must not already have an assigned game ID. A new game ID is
+     * assigned based on the existing history contents, and the resulting record is
+     * appended as a CSV line.
      *
-     * @param record the game record to save; must have an unassigned game ID
-     * @throws NullPointerException     if record is null
-     * @throws IllegalArgumentException if record already has an assigned game ID
-     * @throws IOException              if the history file cannot be created, read, or written
+     * @param record the game record to save; its game ID must be
+     *               {@link GameRecord#UNASSIGNED_ID}
+     * @throws NullPointerException if record is null
+     * @throws IllegalArgumentException if the record already has an assigned game ID
+     * @throws IOException if the history file cannot be read or written, or if the
+     *                     history file is malformed
      */
     public void saveRecord(GameRecord record) throws IOException {
         Objects.requireNonNull(record, "You cannot save a null record");
-
         if (record.gameID() != GameRecord.UNASSIGNED_ID) {
             throw new IllegalArgumentException("Got id: " + record.gameID() +
                     " Expected id: " + GameRecord.UNASSIGNED_ID);
@@ -60,6 +60,10 @@ public class HistoryWriter {
         createFileIfNotExists();
 
         List<String> csvLines = Files.readAllLines(path);
+        if (csvLines.isEmpty() || !csvLines.getFirst().equals(HEADER)) {
+            throw new IOException("History file is malformed (missing or wrong header): " + path );
+        }
+
         var nextID = nextGameID(csvLines);
         var recordToBeWritten = new GameRecord(nextID,
                 record.difficulty(),
@@ -95,25 +99,32 @@ public class HistoryWriter {
         return id + "," + difficulty + "," + startTime + "," + names + "," + duration + "\n";
     }
 
-    // Package-private to allow access to tests in the same package.
-
     /**
-     * Determines the next available game ID from the history CSV lines.
-     * The first line is treated as the header, and each remaining line is expected
-     * to contain the game ID as the first comma-separated field.
+     * Determines the next available positive game ID from the game-history CSV lines.
+     * The first line is treated as the header and ignored. Each remaining line must
+     * have a positive integer game ID in the first comma-separated column.
      *
-     * @param history the history CSV lines; must contain at least the header as the first line
-     * @return one greater than the highest game ID found, or 1 if there are no records
+     * @param history the complete game-history file contents, including the header line
+     * @return one greater than the largest game ID found, or 1 if there are no records
+     * @throws IOException if a record line contains a missing, non-numeric, or non-positive game ID
      */
-    static int nextGameID(List<String> history) {
+    static int nextGameID(List<String> history) throws IOException {
         int maxID = 0;
+        int currentID;
 
         // the first line is the header, so we take all lines except the first one
         var recordLines = history.subList(1, history.size());
 
         for (String line : recordLines) {
             String[] fields = line.split(",");
-            var currentID = Integer.parseInt(fields[0]); //gameID is the first column
+            try {
+                currentID = Integer.parseInt(fields[0]); //gameID is the first column
+            } catch (NumberFormatException e) {
+                throw new IOException("History file is malformed (invalid game ID): " + line, e);
+            }
+            if (currentID <= 0) {
+                throw new IOException("History file is malformed (invalid game ID): " + line);
+            }
             if (currentID > maxID) {
                 maxID = currentID;
             }

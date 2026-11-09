@@ -3,7 +3,6 @@ package Model;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * One row of the game-history CSV.
