@@ -3,9 +3,11 @@ package Model;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Appends a completed game to the history CSV.
@@ -18,7 +20,6 @@ public class HistoryWriter {
             + "game_duration(HH:MM:SS)";
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy; HH:mm:ss"); // Format the timestamp as dd/MM/yyyy; HH:mm:ss
     private static final int NUM_PLACE_COLUMNS = 4; // Maximum number of place columns to pad the ranked names
-
     private final Path path; // the path to the history csv file
 
     /**
@@ -36,8 +37,38 @@ public class HistoryWriter {
         }
     }
 
-    public String saveRecord(GameRecord record) throws IOException {
-        return "";
+    /**
+     * Saves a new game record to the history file.
+     * The record must not already have an assigned game ID. A new ID is determined
+     * from the existing history entries, assigned to a copy of the record, and the
+     * formatted record is appended to the file. If the history file does not exist,
+     * it is created before writing.
+     *
+     * @param record the game record to save; must have an unassigned game ID
+     * @throws NullPointerException     if record is null
+     * @throws IllegalArgumentException if record already has an assigned game ID
+     * @throws IOException              if the history file cannot be created, read, or written
+     */
+    public void saveRecord(GameRecord record) throws IOException {
+        Objects.requireNonNull(record, "You cannot save a null record");
+
+        if (record.gameID() != GameRecord.UNASSIGNED_ID) {
+            throw new IllegalArgumentException("Got id: " + record.gameID() +
+                    " Expected id: " + GameRecord.UNASSIGNED_ID);
+        }
+
+        createFileIfNotExists();
+
+        List<String> csvLines = Files.readAllLines(path);
+        var nextID = nextGameID(csvLines);
+        var recordToBeWritten = new GameRecord(nextID,
+                record.difficulty(),
+                record.startTime(),
+                record.rankedNames(),
+                record.duration());
+
+        var formattedRecord = formatRecordForSaving(recordToBeWritten);
+        Files.writeString(path, formattedRecord, StandardOpenOption.APPEND);
     }
 
     /**

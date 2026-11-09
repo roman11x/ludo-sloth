@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -122,4 +123,81 @@ public class HistoryWriterTest {
 
         assertEquals(expected, actual);
     }
+
+    @Test
+    void nullRecordIsRejected(@TempDir Path tempDir) {
+        Path file = tempDir.resolve("test.csv");
+
+        var writer = new HistoryWriter(file);
+        var e = assertThrows(NullPointerException.class, () -> writer.saveRecord(null));
+        var expectedMessage = "You cannot save a null record";
+
+        boolean there = Files.exists(file);
+
+        assertEquals(expectedMessage, e.getMessage());
+        assertFalse(there);
+    }
+
+    @Test
+    void signedGameIdIsRejected(@TempDir Path tempDir) {
+        Path file = tempDir.resolve("test.csv");
+
+        var writer = new HistoryWriter(file);
+
+        var e = assertThrows(IllegalArgumentException.class, () -> writer.saveRecord(new GameRecord(5,
+                Difficulty.EASY,
+                LocalDateTime.now(),
+                List.of("Mor", "Player2"),
+                Duration.ofSeconds(0))));
+
+        var expectedMessage = "Got id: " + 5 +
+                " Expected id: " + GameRecord.UNASSIGNED_ID;
+
+        assertEquals(expectedMessage, e.getMessage());
+    }
+
+    @Test
+    void newFileMeansHeaderPlusRecord(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("test.csv");
+
+        var writer = new HistoryWriter(file);
+        writer.saveRecord(new GameRecord(GameRecord.UNASSIGNED_ID,
+                Difficulty.EASY,
+                LocalDateTime.of(2023, 4, 1, 0, 0),
+                List.of("Mor", "Player2"),
+                Duration.ofSeconds(0)));
+        List<String> actual = Files.readAllLines(file);
+        List<String> expected = List.of(HEADER,
+                "1,easy,01/04/2023; 00:00:00,Mor,Player2,,,00:00:00");
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    void existingRecordsDoNotGetOverridden(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("test.csv");
+        Files.write(file, List.of(HEADER,
+                "1,easy,01/04/2023; 00:00:00,Mor,Player2,,,00:00:00",
+                "2,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00",
+                "3,hard,19/10/2026; 12:01:00,Mor,Noy,Safa,Muhammed,01:05:04"),
+                StandardOpenOption.CREATE);
+
+        var writer = new HistoryWriter(file);
+        writer.saveRecord(new GameRecord(GameRecord.UNASSIGNED_ID,
+                Difficulty.MEDIUM,
+                LocalDateTime.of(2026, 11, 7, 15, 57),
+                List.of("Alice", "Bob", "Carol", "Dan"),
+                Duration.ofMinutes(30)));
+
+        List<String> actual = Files.readAllLines(file);
+        List<String> expected = List.of(HEADER,
+                "1,easy,01/04/2023; 00:00:00,Mor,Player2,,,00:00:00",
+                "2,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00",
+                "3,hard,19/10/2026; 12:01:00,Mor,Noy,Safa,Muhammed,01:05:04",
+                "4,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00");
+
+        assertEquals(expected, actual);
+    }
+
+
 }

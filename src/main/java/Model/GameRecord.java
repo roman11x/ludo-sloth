@@ -3,6 +3,7 @@ package Model;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * One row of the game-history CSV.
@@ -15,6 +16,7 @@ public record GameRecord(int gameID,
 
     private static final int MIN_RANKED_NAMES = 2;
     private static final int MAX_RANKED_NAMES = 4;
+    public static final int UNASSIGNED_ID = 0;
 
     /**
      * Creates a game history record with validated values.
@@ -49,7 +51,7 @@ public record GameRecord(int gameID,
                       LocalDateTime startTime,
                       List<String> rankedNames,
                       Duration duration) {
-        this(0, difficulty, startTime, rankedNames, duration);
+        this(UNASSIGNED_ID, difficulty, startTime, rankedNames, duration);
     }
 
     private static void validateId(int id) {
