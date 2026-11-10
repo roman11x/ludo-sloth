@@ -145,6 +145,68 @@ class LegalMovesTest {
     }
 
     @Test
+    void castleExitOnSixIsPreferredOverAnotherPiecesShortenedMove() {
+        Piece entering = place(PlayerColor.GREEN, 1, new Position(3, 3));
+        place(PlayerColor.GREEN, 2, route.start());
+        block(2);
+        List<MoveCandidate> candidates = generator.generate(board, PlayerColor.GREEN, 6);
+        for (List<MoveCandidate> ordered : List.of(candidates, candidates.reversed())) {
+            List<MoveCandidate> moves = rules.legalMoves(board, ordered);
+            assertEquals(1, moves.size());
+            assertEquals(entering, moves.getFirst().piece());
+            assertEquals(List.of(route.start()), moves.getFirst().path());
+        }
+    }
+
+    @Test
+    void opposingBlockOnOwnArrowPreventsEntryToHomeAndStopsImmediatelyBeforeArrow() {
+        int arrow = route.positions().indexOf(board.arrowFor(PlayerColor.GREEN));
+        Piece green = place(PlayerColor.GREEN, 1, at(arrow - 2));
+        block(arrow);
+        MoveCandidate full = generator.generate(board, PlayerColor.GREEN, 3).getFirst();
+        assertFalse(rules.isLegalMove(board, green, full.source(), full.path()));
+        MoveCandidate shortened = legal(3).getFirst();
+        assertEquals(List.of(at(arrow - 1)), shortened.path());
+        assertTrue(rules.isLegalMove(board, green, shortened.source(), shortened.path()));
+    }
+
+    @Test
+    void opponentPassesAnotherColorsArrowAsAnOrdinarySharedSquare() {
+        PlayerRoute red = routes.get(PlayerColor.RED);
+        Position greenArrow = board.arrowFor(PlayerColor.GREEN);
+        int index = red.positions().indexOf(greenArrow);
+        Piece piece = place(PlayerColor.RED, 1, red.positions().get(index - 1));
+        List<MoveCandidate> moves = rules.legalMoves(board, generator.generate(board, PlayerColor.RED, 2));
+        assertEquals(1, moves.size());
+        assertEquals(List.of(greenArrow, red.positions().get(index + 1)), moves.getFirst().path());
+        assertTrue(rules.isLegalMove(board, piece, moves.getFirst().source(), moves.getFirst().path()));
+        assertNotEquals(SquareType.HOME_PATH, board.squareAt(moves.getFirst().destination()).type());
+    }
+
+    @Test
+    void filteringAndExecutionRevalidationBothRejectForeignHomeEntry() {
+        Position source = new Position(10, 2);
+        Piece red = place(PlayerColor.RED, 1, source);
+        List<Position> path = List.of(new Position(9, 2), new Position(9, 3));
+        MoveCandidate candidate = new MoveCandidate(red, source, path);
+        assertTrue(rules.legalMoves(board, List.of(candidate)).isEmpty());
+        assertFalse(rules.isLegalMove(board, red, source, path));
+    }
+
+    @Test
+    void filteringAndRevalidationRejectInvalidCastleExitAndPassingThroughFinish() {
+        Piece green = place(PlayerColor.GREEN, 1, new Position(3, 3));
+        List<Position> wrongExit = List.of(at(1));
+        assertTrue(rules.legalMoves(board, List.of(new MoveCandidate(green, new Position(3, 3), wrongExit))).isEmpty());
+        assertFalse(rules.isLegalMove(board, green, new Position(3, 3), wrongExit));
+        Position beforeFinish = at(route.size() - 2);
+        board.movePiece(green, new Position(3, 3), beforeFinish);
+        List<Position> pastFinish = List.of(route.finish(), at(0));
+        assertTrue(rules.legalMoves(board, List.of(new MoveCandidate(green, beforeFinish, pastFinish))).isEmpty());
+        assertFalse(rules.isLegalMove(board, green, beforeFinish, pastFinish));
+    }
+
+    @Test
     void rejectsMixedPlayerListsBecauseFallbackIsDecidedForOnePlayer() {
         Piece green = place(PlayerColor.GREEN, 1, at(0));
         PlayerRoute redRoute = routes.get(PlayerColor.RED);
