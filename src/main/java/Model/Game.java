@@ -135,7 +135,7 @@ public final class Game {
                 .orElseThrow(() -> new IllegalArgumentException("Piece has no legal move for this roll"));
         // Board is currently exposed for setup/inspection; reject a stale source
         // or a newly blocked path before changing any occupancy.
-        if (!moveRules.canMoveWithoutDoubleBlock(board, piece, move.source(), move.path())) {
+        if (!moveRules.isLegalMove(board, piece, move.source(), move.path())) {
             throw new IllegalStateException("The stored move no longer matches the board");
         }
         applyMove(move);
