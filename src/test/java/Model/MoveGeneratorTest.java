@@ -96,7 +96,7 @@ class MoveGeneratorTest {
         board.placePiece(new Piece(PlayerColor.RED, 2), blocked);
         MoveCandidate candidate = generator.generate(board, PlayerColor.GREEN, 2).getFirst();
         assertEquals(route.positions().subList(1, 3), candidate.path());
-        assertFalse(new MoveRules().canMoveWithoutDoubleBlock(board, candidate.piece(),
+        assertFalse(new MoveRules().isLegalMove(board, candidate.piece(),
                 candidate.source(), candidate.path()));
     }
 

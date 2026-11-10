@@ -1,6 +1,6 @@
 package Model;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -10,15 +10,22 @@ public final class Square {
     private final SquareType type;
     private final SquareColor associatedColor;
     private final SquareStatus status;
-    private final List<Piece> pieces = new ArrayList<>();
+    private final List<Piece> pieces;
 
     public Square(Position position, SquareType type,
                   SquareColor associatedColor, SquareStatus status) {
+        this(position, type, associatedColor, status, List.of());
+    }
+
+    /** Read-only view of the backing list privately owned by a Board cell. */
+    Square(Position position, SquareType type, SquareColor associatedColor,
+           SquareStatus status, List<Piece> pieces) {
         this.position = Objects.requireNonNull(position, "position");
         this.type = Objects.requireNonNull(type, "type");
         this.associatedColor = Objects.requireNonNull(associatedColor,
                 "Use NEUTRAL for an unassociated square");
         this.status = Objects.requireNonNull(status, "status");
+        this.pieces = Collections.unmodifiableList(Objects.requireNonNull(pieces, "pieces"));
     }
 
     public Position position() {
@@ -42,19 +49,4 @@ public final class Square {
         return List.copyOf(pieces);
     }
 
-    // Package-private operations used by Board after checking the placement.
-    void addPiece(Piece piece) {
-        Objects.requireNonNull(piece, "piece");
-        if (pieces.contains(piece)) {
-            throw new IllegalArgumentException("Piece is already on this square");
-        }
-        if (pieces.stream().filter(p -> p.color() == piece.color()).count() >= 4) {
-            throw new IllegalArgumentException("At most four pieces of one color per square");
-        }
-        pieces.add(piece);
-    }
-
-    boolean removePiece(Piece piece) {
-        return pieces.remove(piece);
-    }
 }
