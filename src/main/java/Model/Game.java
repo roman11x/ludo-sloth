@@ -1,5 +1,9 @@
 package Model;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.function.LongSupplier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +25,10 @@ public final class Game {
     private final MoveRules moveRules = new MoveRules();
     private List<MoveCandidate> legalMoves = List.of();
     private final List<Player> ranking = new ArrayList<>();
+    private final LocalDateTime startTime;
+    private final LongSupplier nanoTime;
+    private final long startedAtNanos;
+    private Duration finalDuration;
 
     public Game(List<Player> players) {
         this(players, new StandardDie(), new Random(), new Random());
@@ -29,6 +37,15 @@ public final class Game {
     /** Separate random sources allow reproducible layouts and first-player tests. */
     public Game(List<Player> players, Die standardDie,
                 Random boardRandom, Random firstPlayerRandom) {
+        this(players, standardDie, boardRandom, firstPlayerRandom,
+                Clock.systemDefaultZone(), System::nanoTime);
+    }
+
+    /** Package-visible clock injection for tests; elapsed time must be monotonic. */
+    Game(List<Player> players, Die standardDie, Random boardRandom,
+         Random firstPlayerRandom, Clock clock, LongSupplier nanoTime) {
+        Objects.requireNonNull(clock, "clock");
+        this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         List<Player> participants = List.copyOf(players);
         Objects.requireNonNull(standardDie, "standardDie");
         Objects.requireNonNull(boardRandom, "boardRandom");
@@ -46,6 +63,9 @@ public final class Game {
         this.turnManager = new TurnManager(participants, standardDie, firstPlayerRandom);
         this.players = turnManager.players();
         placeInitialPieces();
+        // Start only when setup, piece placement and first-player selection are complete.
+        this.startTime = LocalDateTime.now(clock);
+        this.startedAtNanos = this.nanoTime.getAsLong();
     }
 
     private void placeInitialPieces() {
@@ -126,6 +146,7 @@ public final class Game {
         }
         turnManager.completeTurn(player, playerFinished);
         if (isFinished()) {
+            finalDuration = elapsedDuration();
             // The remaining participant is last, without moving their pieces
             // or claiming that all four of them reached Finish.
             Player last = players.stream().filter(participant -> !ranking.contains(participant))
@@ -163,6 +184,21 @@ public final class Game {
                 .filter(position -> board.piecesAt(position).isEmpty())
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("No empty Castle slot for " + color));
+    }
+
+    /** Wall-clock timestamp for display/history; it is not used to measure elapsed time. */
+    public LocalDateTime startTime() {
+        return startTime;
+    }
+
+    /** Live elapsed duration while playing; a fixed value after game completion. */
+    public Duration duration() {
+        return finalDuration == null ? elapsedDuration() : finalDuration;
+    }
+
+    private Duration elapsedDuration() {
+        // Subtract nanoTime readings: their absolute values are not timestamps.
+        return Duration.ofNanos(nanoTime.getAsLong() - startedAtNanos);
     }
 
     /** Derives completion from board occupancy rather than a second piece-state flag. */
