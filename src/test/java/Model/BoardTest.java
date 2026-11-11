@@ -175,8 +175,13 @@ class BoardTest {
         for (int row = 0; row < 19; row++) {
             for (int column = 0; column < 19; column++) {
                 Position position = new Position(row, column);
-                assertEquals(board.squareAt(position), same.squareAt(position));
-                changed |= !board.squareAt(position).equals(different.squareAt(position));
+                Square expected = board.squareAt(position);
+                Square actual = same.squareAt(position);
+                assertEquals(expected.position(), actual.position());
+                assertEquals(expected.type(), actual.type());
+                assertEquals(expected.associatedColor(), actual.associatedColor());
+                assertEquals(expected.status(), actual.status());
+                changed |= expected.type() != different.squareAt(position).type();
             }
         }
         assertTrue(changed);
