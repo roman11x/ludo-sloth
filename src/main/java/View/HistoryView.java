@@ -6,11 +6,13 @@ import java.util.function.Function;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.geometry.Pos;
+import javafx.scene.AccessibleRole;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -106,6 +108,30 @@ public class HistoryView {
         message.setWrapText(true);
         StackPane panel = new StackPane(message);
         panel.getStyleClass().addAll("ludo-panel", "history-empty");
+        listArea.getChildren().setAll(panel);
+    }
+
+    /**
+     * Replaces the table with an error notice, for when the history file cannot be read.
+     * {@code message} is plain text describing the problem. Back to Main Menu keeps working.
+     */
+    public void showLoadError(String message) {
+        table.getItems().clear();
+        Label tag = new Label("Error");
+        tag.getStyleClass().add("ludo-tag");
+        tag.setMinWidth(Region.USE_PREF_SIZE);
+        Label heading = new Label("The game history could not be read.");
+        heading.getStyleClass().add("history-error-heading");
+        heading.setWrapText(true);
+        HBox headingRow = new HBox(10, tag, heading);
+        headingRow.setAlignment(Pos.CENTER_LEFT);
+        Label detail = new Label(message == null ? "" : message);
+        detail.getStyleClass().add("history-error-text");
+        detail.setWrapText(true);
+        VBox panel = new VBox(10, headingRow, detail);
+        panel.getStyleClass().add("history-error");
+        panel.setAccessibleRole(AccessibleRole.TEXT);
+        panel.setAccessibleText(heading.getText() + " " + detail.getText());
         listArea.getChildren().setAll(panel);
     }
 

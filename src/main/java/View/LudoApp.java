@@ -43,12 +43,24 @@ public class LudoApp extends Application {
     }
 
     /**
-     * Development only: --dev-setup, --dev-board, --dev-results, --dev-results-save-error,
-     * --dev-history or --dev-history-empty opens that screen directly instead of the Main Menu.
+     * Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-results,
+     * --dev-results-save-error, --dev-history, --dev-history-empty or --dev-history-error
+     * opens that screen directly instead of the Main Menu.
      * Returns {@code null} for a normal launch.
      */
     private static Parent devScreen(List<String> launchArgs) {
-        if (launchArgs.contains("--dev-history-empty")) {
+        if (launchArgs.contains("--dev-history-error")) {
+            HistoryView history = new HistoryView();
+            history.showLoadError("Line 4 of the history file cannot be read: "
+                    + "the difficulty \"expert\" is not Easy, Medium or Hard.");
+            return history.getRoot();
+        } else if (launchArgs.contains("--dev-setup-errors")) {
+            SetupView setup = new SetupView();
+            setup.showValidationMessages(List.of(
+                    "Please use unique player names: \"Maya\" is used twice.",
+                    "Please enter a name for Player 2."));
+            return setup.getRoot();
+        } else if (launchArgs.contains("--dev-history-empty")) {
             HistoryView history = new HistoryView();
             history.showNoGames();
             return history.getRoot();
