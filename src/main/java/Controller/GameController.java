@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 import Model.Board;
 import Model.Game;
@@ -21,6 +22,7 @@ import View.BoardView;
 import View.DiceView;
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
+import javafx.animation.PauseTransition;
 import javafx.animation.Timeline;
 import javafx.util.Duration;
 
@@ -40,6 +42,10 @@ public class GameController {
     private final BoardView boardView;
     private final DiceView diceView;
     private final Timeline clock;
+    // How long the board shows its final message before the game end is reported
+    private final PauseTransition resultsDelay = new PauseTransition(Duration.seconds(3));
+    private Consumer<Game> onGameOver;
+    private boolean gameOverReported;
     private Player choosingPlayer;
     private TurnRoll choosingRoll;
     private List<MoveCandidate> choosingMoves = List.of();
@@ -93,9 +99,30 @@ public class GameController {
      */
     public void stop() {
         clock.stop();
+        resultsDelay.stop();
     }
 
-    private static List<Player> players(List<String> names, List<String> colours) {
+    /**
+     * Sets what happens once the game has ended: it receives the finished game, after the board
+     * has shown its final message for a moment. Runs once per game.
+     */
+    public void setOnGameOver(Consumer<Game> action) {
+        onGameOver = action;
+        if (game.isFinished() && !gameOverReported) {
+            reportGameOver();
+        }
+    }
+
+    private void reportGameOver() {
+        if (onGameOver == null || gameOverReported) {
+            return;
+        }
+        gameOverReported = true;
+        resultsDelay.setOnFinished(event -> onGameOver.accept(game));
+        resultsDelay.playFromStart();
+    }
+
+    static List<Player> players(List<String> names, List<String> colours) {
         Objects.requireNonNull(names, "names");
         Objects.requireNonNull(colours, "colours");
         if (names.size() != colours.size()) {
@@ -221,7 +248,9 @@ public class GameController {
             order.append(i == 0 ? "" : ", ").append(PLACES[i]).append(' ').append(ranking.get(i).name());
         }
         boardView.showMessage((text.isEmpty() ? "" : text + " ") + "Game over: " + winner.name()
-                + " wins! Final order: " + order + ".");
+                + " wins! Final order: " + order + "."
+                + (onGameOver != null ? " The results open in a moment." : ""));
+        reportGameOver();
     }
 
     private void showTurn() {
@@ -271,7 +300,7 @@ public class GameController {
         return game.turnManager().currentPlayer();
     }
 
-    private static String colourName(PlayerColor color) {
+    static String colourName(PlayerColor color) {
         String name = color.name();
         return name.charAt(0) + name.substring(1).toLowerCase(Locale.ROOT);
     }
