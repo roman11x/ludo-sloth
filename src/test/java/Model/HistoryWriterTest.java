@@ -283,5 +283,24 @@ public class HistoryWriterTest {
         assertEquals(3, Files.readAllLines(file).size());
     }
 
+    @Test
+    void fileWithMalformedRecordIsRejected(@TempDir Path tempdir) throws IOException {
+        Path file = tempdir.resolve("test.csv");
+        String invalidRecord = "1, broken";
+        Files.write(file, List.of(HEADER, invalidRecord));
+        List<String> expected = Files.readAllLines(file);
+
+        var writer = new HistoryWriter(file);
+        var e = assertThrows(IOException.class, () -> writer.saveRecord(new GameRecord(GameRecord.UNASSIGNED_ID,
+                Difficulty.MEDIUM,
+                LocalDateTime.of(2026, 11, 7, 15, 57),
+                List.of("Alice", "Bob", "Carol", "Dan"),
+                Duration.ofMinutes(30))));
+
+        List<String> actual = Files.readAllLines(file);
+        assertEquals(expected, actual);
+        assertTrue(e.getMessage().contains("History file is malformed: " + file));
+    }
+
 
 }
