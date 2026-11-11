@@ -1,18 +1,31 @@
 package Model;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 
 /**
- * Fixed square definitions in the global 19x19 coordinate system.
+ * Per-game board with fixed square definitions and changing piece occupancy.
  * Every coordinate has a Square with a separate activity status.
- * Player routes and changing piece occupancy are maintained separately.
+ * Coordinates use the global 19x19 matrix; player routes are maintained separately.
  */
 public final class Board {
     public static final int STORAGE_SIZE = 19;
 
-    private final Square[][] squares = new Square[STORAGE_SIZE][STORAGE_SIZE];
+    private final Cell[][] cells = new Cell[STORAGE_SIZE][STORAGE_SIZE];
+
+    /** Only Board can access or mutate a cell's backing occupancy list. */
+    private static final class Cell {
+        private final List<Piece> pieces = new ArrayList<>();
+        private final Square square;
+
+        private Cell(Position position, SquareType type, SquareColor color, SquareStatus status) {
+            square = new Square(position, type, color, status, pieces);
+        }
+    }
 
     private Board() {
         for (int row = 0; row < STORAGE_SIZE; row++) {
@@ -106,8 +119,9 @@ public final class Board {
     private void placeEasyProtectedSquares(Random random) {
         // A temporary set of candidates for random selection, not a route.
         var candidates = new ArrayList<Position>();
-        for (Square[] row : squares) {
-            for (Square square : row) {
+        for (Cell[] row : cells) {
+            for (Cell cell : row) {
+                Square square = cell.square;
                 if (square.type() == SquareType.NORMAL && square.status() == SquareStatus.ACTIVE) {
                     candidates.add(square.position());
                 }
@@ -129,15 +143,87 @@ public final class Board {
 
     /** Returns any cell, including inactive Castle and empty cells. Only out-of-bounds cells are rejected. */
     public Square squareAt(Position position) {
-        if (!isWithinBounds(position)) {
-            throw new IllegalArgumentException("Position is outside the board: " + position);
-        }
-        return squares[position.row()][position.column()];
+        return cellAt(position).square;
     }
 
     public boolean isActive(Position position) {
         return isWithinBounds(position)
                 && squareAt(position).status() == SquareStatus.ACTIVE;
+    }
+
+    public List<Piece> piecesAt(Position position) {
+        return squareAt(position).pieces();
+    }
+
+    /** Derived snapshot, not a second stored copy of piece locations. */
+    public Map<Position, List<Piece>> occupancy() {
+        Map<Position, List<Piece>> snapshot = new HashMap<>();
+        for (Cell[] row : cells) {
+            for (Cell cell : row) {
+                Square square = cell.square;
+                List<Piece> pieces = square.pieces();
+                if (!pieces.isEmpty()) snapshot.put(square.position(), pieces);
+            }
+        }
+        return Map.copyOf(snapshot);
+    }
+
+    public boolean hasPieces() {
+        for (Cell[] row : cells) {
+            for (Cell cell : row) {
+                Square square = cell.square;
+                if (!square.pieces().isEmpty()) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Places an unplaced piece on an active square without duplicating it.
+     * Turn, capture, blocking and movement legality are checked separately.
+     */
+    public void placePiece(Piece piece, Position position) {
+        Objects.requireNonNull(piece, "piece");
+        Square destination = squareAt(position);
+        if (destination.status() != SquareStatus.ACTIVE) {
+            throw new IllegalArgumentException("Cannot place a piece on an inactive square");
+        }
+        for (Cell[] row : cells) {
+            for (Cell cell : row) {
+                Square square = cell.square;
+                if (square.pieces().contains(piece)) {
+                    throw new IllegalArgumentException("Piece is already on this board: " + piece);
+                }
+            }
+        }
+        addPiece(cellAt(position), piece);
+    }
+
+    /** Removes a piece from the stated square; rejects incorrect source locations. */
+    public void removePiece(Piece piece, Position position) {
+        Objects.requireNonNull(piece, "piece");
+        if (!cellAt(position).pieces.remove(piece)) {
+            throw new IllegalArgumentException("Piece is not at " + position);
+        }
+    }
+
+    /**
+     * Relocates occupancy after the caller has validated movement rules.
+     * Destination validation happens before removing the source piece, so a
+     * rejected relocation leaves occupancy unchanged. No capture is performed.
+     */
+    public void movePiece(Piece piece, Position from, Position to) {
+        Objects.requireNonNull(piece, "piece");
+        Square source = squareAt(from);
+        Square destination = squareAt(to);
+        if (!source.pieces().contains(piece)) {
+            throw new IllegalArgumentException("Piece is not at " + from);
+        }
+        if (from.equals(to) || destination.status() != SquareStatus.ACTIVE) {
+            throw new IllegalArgumentException("Destination must be a different active square");
+        }
+        addPiece(cellAt(to), piece);
+        cellAt(from).pieces.remove(piece);
     }
 
     public Position startFor(PlayerColor color) {
@@ -151,8 +237,9 @@ public final class Board {
     private Position findPosition(SquareType type, PlayerColor color) {
         SquareColor associatedColor = SquareColor.fromPlayerColor(
                 Objects.requireNonNull(color, "color"));
-        for (Square[] row : squares) {
-            for (Square square : row) {
+        for (Cell[] row : cells) {
+            for (Cell cell : row) {
+                Square square = cell.square;
                 if (square.type() == type && square.associatedColor() == associatedColor) {
                     return square.position();
                 }
@@ -161,8 +248,25 @@ public final class Board {
         throw new IllegalStateException("Missing " + type + " for " + color);
     }
 
+    private Cell cellAt(Position position) {
+        if (!isWithinBounds(position)) {
+            throw new IllegalArgumentException("Position is outside the board: " + position);
+        }
+        return cells[position.row()][position.column()];
+    }
+
+    private void addPiece(Cell cell, Piece piece) {
+        if (cell.pieces.contains(piece)) {
+            throw new IllegalArgumentException("Piece is already on this square");
+        }
+        if (cell.pieces.stream().filter(p -> p.color() == piece.color()).count() >= 4) {
+            throw new IllegalArgumentException("At most four pieces of one color per square");
+        }
+        cell.pieces.add(piece);
+    }
+
     private void defineSquare(int row, int column, SquareType type,
                               SquareColor color, SquareStatus status) {
-        squares[row][column] = new Square(new Position(row, column), type, color, status);
+        cells[row][column] = new Cell(new Position(row, column), type, color, status);
     }
 }
