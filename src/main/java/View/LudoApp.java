@@ -1,10 +1,13 @@
 package View;
 
 import java.util.List;
+import java.util.function.Consumer;
 
+import Controller.MainMenuController;
 import javafx.application.Application;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.layout.Region;
 import javafx.stage.Stage;
 
 /**
@@ -16,34 +19,19 @@ public class LudoApp extends Application {
     public void start(Stage stage) {
         // Set the window title
         stage.setTitle("Ludo – Team Sloth");
-        // Development only: --dev-setup, --dev-board, --dev-results, --dev-results-save-error,
-        // --dev-history or --dev-history-empty opens that screen directly instead of the Main Menu
-        List<String> launchArgs = getParameters().getRaw();
-        // Build the first screen: the Main Menu, or a screen picked for development
-        Parent firstScreen;
-        if (launchArgs.contains("--dev-history-empty")) {
-            HistoryView history = new HistoryView();
-            history.showNoGames();
-            firstScreen = history.getRoot();
-        } else if (launchArgs.contains("--dev-history")) {
-            firstScreen = new HistoryView().getRoot();
-        } else if (launchArgs.contains("--dev-results-save-error")) {
-            ResultsView results = new ResultsView();
-            results.setSaveStatus(false);
-            firstScreen = results.getRoot();
-        } else if (launchArgs.contains("--dev-results")) {
-            firstScreen = new ResultsView().getRoot();
-        } else if (launchArgs.contains("--dev-board")) {
-            firstScreen = new BoardView().getRoot();
-        } else if (launchArgs.contains("--dev-setup")) {
-            firstScreen = new SetupView().getRoot();
-        } else {
-            firstScreen = new MainMenuView().getRoot();
-        }
-        // Create an 800x600 scene showing the first screen
-        Scene scene = new Scene(firstScreen, 800, 600);
+        // Create an 800x600 scene; its root is replaced by whichever screen is shown
+        Scene scene = new Scene(new Region(), 800, 600);
         // Apply the shared look (white background, chunky square buttons)
         scene.getStylesheets().add(getClass().getResource("/View/ludo.css").toExternalForm());
+        // Screens switch by replacing the scene's root, so the window keeps its size and maximised state
+        Consumer<Parent> showScreen = scene::setRoot;
+        // Show the first screen: a screen picked for development, or the Main Menu
+        Parent devScreen = devScreen(getParameters().getRaw());
+        if (devScreen != null) {
+            showScreen.accept(devScreen);
+        } else {
+            new MainMenuController(showScreen).show();
+        }
         // Attach the scene to the window
         stage.setScene(scene);
         // Never let the window shrink below the size the menu needs, so nothing is cut off
@@ -51,6 +39,32 @@ public class LudoApp extends Application {
         stage.setMinHeight(480);
         // Show the window
         stage.show();
+    }
+
+    /**
+     * Development only: --dev-setup, --dev-board, --dev-results, --dev-results-save-error,
+     * --dev-history or --dev-history-empty opens that screen directly instead of the Main Menu.
+     * Returns {@code null} for a normal launch.
+     */
+    private static Parent devScreen(List<String> launchArgs) {
+        if (launchArgs.contains("--dev-history-empty")) {
+            HistoryView history = new HistoryView();
+            history.showNoGames();
+            return history.getRoot();
+        } else if (launchArgs.contains("--dev-history")) {
+            return new HistoryView().getRoot();
+        } else if (launchArgs.contains("--dev-results-save-error")) {
+            ResultsView results = new ResultsView();
+            results.setSaveStatus(false);
+            return results.getRoot();
+        } else if (launchArgs.contains("--dev-results")) {
+            return new ResultsView().getRoot();
+        } else if (launchArgs.contains("--dev-board")) {
+            return new BoardView().getRoot();
+        } else if (launchArgs.contains("--dev-setup")) {
+            return new SetupView().getRoot();
+        }
+        return null;
     }
 
     public static void main(String[] args) {
