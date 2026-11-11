@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import static Model.HistoryWriter.formatRecordForSaving;
@@ -66,30 +67,40 @@ public class HistoryWriterTest {
     }
 
     @Test
-    void returnsOneIfThereAreNoRecords() throws IOException {
-        var headerLine = List.of(HEADER);
+    void returnsOneIfThereAreNoRecords() {
+        List<GameRecord> records = new ArrayList<>();
 
-        var id = nextGameID(headerLine);
+        var id = nextGameID(records);
 
         assertEquals(1, id);
     }
 
     @Test
     void returnsNextIdForSingleRecord() throws IOException {
-        var records = List.of(HEADER,
-                "5,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00");
+        var records = List.of(new GameRecord(1, Difficulty.MEDIUM,
+                LocalDateTime.of(2026, 11, 7, 15, 57, 0),
+                List.of("Alice", "Bob", "Carol", "Dan"),
+                Duration.ofMinutes(30)));
 
         var id = nextGameID(records);
 
-        assertEquals(6, id);
+        assertEquals(2, id);
     }
 
     @Test
     void returnsNextIdFromHighestRecordId() throws IOException {
-        var records = List.of(HEADER,
-                "2,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00",
-                "5,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00",
-                "1,medium,07/11/2026; 15:57:00,Alice,Bob,Carol,Dan,00:30:00");
+        var records = List.of(new GameRecord(1, Difficulty.MEDIUM,
+                LocalDateTime.of(2026, 11, 7, 15, 57, 0),
+                List.of("Alice", "Bob", "Carol", "Dan"),
+                Duration.ofMinutes(30)),
+                new GameRecord(5, Difficulty.MEDIUM,
+                LocalDateTime.of(2026, 11, 7, 15, 57, 0),
+                List.of("Alice", "Bob", "Carol", "Dan"),
+                Duration.ofMinutes(30)),
+                new GameRecord(2, Difficulty.MEDIUM,
+                LocalDateTime.of(2026, 11, 7, 15, 57, 0),
+                List.of("Alice", "Bob", "Carol", "Dan"),
+                Duration.ofMinutes(30)));
 
         var id = nextGameID(records);
 
@@ -213,7 +224,7 @@ public class HistoryWriterTest {
                 Duration.ofMinutes(30))));
         List<String> actual = Files.readAllLines(file);
 
-        assertTrue(e.getMessage().contains("History file is malformed (missing or wrong header): " + file));
+        assertTrue(e.getMessage().contains("History file is malformed: " + file));
         assertEquals(expected, actual);
     }
 
@@ -232,7 +243,7 @@ public class HistoryWriterTest {
 
         List<String> actual = Files.readAllLines(file);
         assertEquals(expected, actual);
-        assertTrue(e.getMessage().contains("History file is malformed (missing or wrong header): " + file));
+        assertTrue(e.getMessage().contains("History file is malformed: " + file));
     }
 
     @Test
@@ -251,7 +262,7 @@ public class HistoryWriterTest {
 
         List<String> actual = Files.readAllLines(file);
         assertEquals(expected, actual);
-        assertTrue(e.getMessage().contains("History file is malformed (invalid game ID): " + invalidRecord));
+        assertTrue(e.getMessage().contains("History file is malformed: " + file));
     }
 
     @Test
