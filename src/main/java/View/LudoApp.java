@@ -3,6 +3,7 @@ package View;
 import java.util.List;
 import java.util.function.Consumer;
 
+import Controller.GameController;
 import Controller.MainMenuController;
 import javafx.application.Application;
 import javafx.scene.Parent;
@@ -60,7 +61,10 @@ public class LudoApp extends Application {
         } else if (launchArgs.contains("--dev-results")) {
             return new ResultsView().getRoot();
         } else if (launchArgs.contains("--dev-board")) {
-            return new BoardView().getRoot();
+            // The board with Roll working through GameController, before Start Game is wired
+            BoardView board = new BoardView();
+            new GameController(board);
+            return board.getRoot();
         } else if (launchArgs.contains("--dev-setup")) {
             return new SetupView().getRoot();
         }
