@@ -18,6 +18,7 @@ public class HistoryWriter {
             + "timestamp(DD/MM/YYYY; HH:MM:SS),"
             + "1st_place_name,2nd_place_name,3rd_place_name,4rd_place_name,"
             + "game_duration(HH:MM:SS)";
+    private static final String LINE_BREAK = "\n";
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy; HH:mm:ss"); // Format the timestamp as dd/MM/yyyy; HH:mm:ss
     private static final int NUM_PLACE_COLUMNS = 4; // Maximum number of place columns to pad the ranked names
     private final Path path; // the path to the history csv file
@@ -70,8 +71,13 @@ public class HistoryWriter {
                 record.startTime(),
                 record.rankedNames(),
                 record.duration());
-
         var formattedRecord = formatRecordForSaving(recordToBeWritten);
+
+        String text = Files.readString(path); // read the entire file into a string
+        if (!text.endsWith(LINE_BREAK)) {
+            Files.writeString(path, LINE_BREAK, StandardOpenOption.APPEND);
+        }
+
         Files.writeString(path, formattedRecord, StandardOpenOption.APPEND);
     }
 

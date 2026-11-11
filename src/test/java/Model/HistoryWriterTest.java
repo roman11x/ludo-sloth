@@ -254,5 +254,23 @@ public class HistoryWriterTest {
         assertTrue(e.getMessage().contains("History file is malformed (invalid game ID): " + invalidRecord));
     }
 
+    @Test
+    void appendsRecordWhenFileLacksTrailingNewline(@TempDir Path tempdir) throws IOException {
+        Path file = tempdir.resolve("test.csv");
+        var courseTemplate =
+                "gameID,difficulty,timestamp(DD/MM/YYYY; HH:MM:SS),1st_place_name,2nd_place_name,3rd_place_name,4rd_place_name,game_duration(HH:MM:SS)\r\n"
+                        + "1,hard,19/10/2026;12:01:00 ,Mor,Noy,Safa,Muhammed,01:05:04";
+        Files.writeString(file, courseTemplate);
+
+        var writer = new HistoryWriter(file);
+        writer.saveRecord(new GameRecord(GameRecord.UNASSIGNED_ID,
+                Difficulty.MEDIUM,
+                LocalDateTime.of(2026, 11, 7, 15, 57),
+                List.of("Alice", "Bob", "Carol", "Dan"),
+                Duration.ofMinutes(30)));
+
+        assertEquals(3, Files.readAllLines(file).size());
+    }
+
 
 }
