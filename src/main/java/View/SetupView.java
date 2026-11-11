@@ -5,6 +5,7 @@ import java.util.List;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.AccessibleRole;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -39,14 +40,25 @@ public class SetupView {
     private final VBox summaryLines = new VBox(8);
     private final Button backButton;
     private final Button startButton;
+    private final HBox messagesBox = new HBox(10);
+    private final VBox messageLines = new VBox(0);
+    private final Label title = new Label("New Game Setup");
+    private final BorderPane page = new BorderPane();
+    private final VBox bottom;
     private int playerCount = MAX_PLAYERS;
+
+    // Normal spacing, and the tighter spacing used while validation messages are shown so that up
+    // to three messages still fit at 800x600 with four players, without scrolling
+    private static final Insets TITLE_MARGIN = new Insets(0, 0, 16, 0);
+    private static final Insets TITLE_MARGIN_WITH_MESSAGES = new Insets(0, 0, 8, 0);
+    private static final Insets BOTTOM_MARGIN = new Insets(20, 0, 0, 0);
+    private static final Insets BOTTOM_MARGIN_WITH_MESSAGES = new Insets(6, 0, 0, 0);
 
     public SetupView() {
         // Screen title, centred like the Main Menu title
-        Label title = new Label("New Game Setup");
         title.getStyleClass().add("ludo-screen-title");
         BorderPane.setAlignment(title, Pos.CENTER);
-        BorderPane.setMargin(title, new Insets(0, 0, 16, 0));
+        BorderPane.setMargin(title, TITLE_MARGIN);
 
         // Form on the left, live summary on the right
         VBox form = new VBox(16, buildPlayerCountRow(), buildPlayerRows(), buildDifficulty());
@@ -60,13 +72,27 @@ public class SetupView {
         startButton.getStyleClass().addAll("ludo-button", "ludo-button-primary");
         HBox buttons = new HBox(24, backButton, startButton);
         buttons.setAlignment(Pos.CENTER);
-        BorderPane.setMargin(buttons, new Insets(20, 0, 0, 0));
+
+        // Validation messages sit right above the buttons; hidden and taking no space until shown
+        messageLines.setFillWidth(true);
+        HBox.setHgrow(messageLines, Priority.ALWAYS);
+        Label messageTag = new Label("Please fix");
+        messageTag.getStyleClass().add("ludo-tag");
+        messageTag.setMinWidth(Region.USE_PREF_SIZE);
+        messagesBox.getChildren().addAll(messageTag, messageLines);
+        messagesBox.setAlignment(Pos.TOP_LEFT);
+        messagesBox.getStyleClass().add("setup-messages");
+        messagesBox.setAccessibleRole(AccessibleRole.TEXT);
+        messagesBox.setFocusTraversable(true);
+        messagesBox.setVisible(false);
+        messagesBox.setManaged(false);
+        bottom = new VBox(8, messagesBox, buttons);
+        BorderPane.setMargin(bottom, BOTTOM_MARGIN);
 
         // Top, centre and bottom are set in reading order so Tab follows it
-        BorderPane page = new BorderPane();
         page.setTop(title);
         page.setCenter(middle);
-        page.setBottom(buttons);
+        page.setBottom(bottom);
         page.getStyleClass().add("ludo-setup-page");
         page.setMaxWidth(PAGE_MAX_WIDTH);
         page.setMaxHeight(Region.USE_PREF_SIZE);
@@ -86,6 +112,58 @@ public class SetupView {
      */
     public Parent getRoot() {
         return root;
+    }
+
+    /**
+     * Shows validation messages (plain text, one per problem) right above the buttons, and moves
+     * keyboard focus to them so screen readers announce them. What the user entered is not
+     * changed. An empty list clears the messages.
+     */
+    public void showValidationMessages(List<String> messages) {
+        if (messages == null || messages.isEmpty()) {
+            clearValidationMessages();
+            return;
+        }
+        messageLines.getChildren().clear();
+        for (String message : messages) {
+            Label line = new Label(message);
+            line.getStyleClass().add("setup-message-text");
+            line.setWrapText(true);
+            line.setMaxWidth(Double.MAX_VALUE);
+            messageLines.getChildren().add(line);
+        }
+        messagesBox.setAccessibleText("Please fix: " + String.join(" ", messages));
+        messagesBox.setVisible(true);
+        messagesBox.setManaged(true);
+        setCompactSpacing(true);
+        messagesBox.requestFocus();
+    }
+
+    /**
+     * Hides the validation messages. What the user entered is not changed.
+     */
+    public void clearValidationMessages() {
+        boolean hadFocus = messagesBox.isFocused();
+        messageLines.getChildren().clear();
+        messagesBox.setAccessibleText(null);
+        messagesBox.setVisible(false);
+        messagesBox.setManaged(false);
+        setCompactSpacing(false);
+        if (hadFocus) {
+            startButton.requestFocus();
+        }
+    }
+
+    private void setCompactSpacing(boolean compact) {
+        BorderPane.setMargin(title, compact ? TITLE_MARGIN_WITH_MESSAGES : TITLE_MARGIN);
+        BorderPane.setMargin(bottom, compact ? BOTTOM_MARGIN_WITH_MESSAGES : BOTTOM_MARGIN);
+        if (compact) {
+            if (!page.getStyleClass().contains("setup-page-with-messages")) {
+                page.getStyleClass().add("setup-page-with-messages");
+            }
+        } else {
+            page.getStyleClass().remove("setup-page-with-messages");
+        }
     }
 
     /**
