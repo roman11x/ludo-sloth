@@ -86,6 +86,14 @@ public class DiceView {
      * get only the final value.
      */
     public void showResult(int value) {
+        showResult(value, null);
+    }
+
+    /**
+     * Like {@link #showResult(int)}, then runs {@code afterShown} (if not {@code null}) once the
+     * final value is on screen.
+     */
+    public void showResult(int value, Runnable afterShown) {
         if (rolling != null) {
             rolling.stop();
         }
@@ -105,9 +113,25 @@ public class DiceView {
                 resultBox.setRotate(tilt);
             }));
         }
-        animation.getKeyFrames().add(new KeyFrame(time.add(Duration.millis(FINAL_GAP_MS)), event -> settle(value)));
+        animation.getKeyFrames().add(new KeyFrame(time.add(Duration.millis(FINAL_GAP_MS)), event -> {
+            settle(value);
+            if (afterShown != null) {
+                afterShown.run();
+            }
+        }));
         rolling = animation;
         animation.play();
+    }
+
+    /**
+     * Makes Roll available or unavailable (button and Space). When made available, keyboard focus
+     * moves to the Roll button.
+     */
+    public void setRollEnabled(boolean enabled) {
+        rollButton.setDisable(!enabled);
+        if (enabled) {
+            rollButton.requestFocus();
+        }
     }
 
     private void settle(int value) {
@@ -132,9 +156,10 @@ public class DiceView {
     }
 
     /**
-     * Space presses the Roll button wherever the focus is, once per key press (holding the key
-     * does not repeat). The scene-level filter consumes both key events, so a focused Roll button
-     * is not also pressed by its own Space handling.
+     * While Roll is available, Space presses it wherever the focus is, and the scene-level filter
+     * consumes the key so a focused Roll button is not also pressed by its own Space handling.
+     * While Roll is unavailable, a fresh Space press reaches the focused control (e.g. a piece to
+     * choose). Repeats of a held key never act, so one press is one action.
      */
     private void installSpaceShortcut() {
         EventHandler<KeyEvent> spaceFilter = event -> {
@@ -142,14 +167,24 @@ public class DiceView {
                 return;
             }
             if (event.getEventType() == KeyEvent.KEY_PRESSED) {
-                if (!spaceHeld && !rollButton.isDisabled()) {
+                boolean repeat = spaceHeld;
+                spaceHeld = true;
+                if (rollButton.isDisabled()) {
+                    if (repeat) {
+                        event.consume();
+                    }
+                    return;
+                }
+                if (!repeat) {
                     rollButton.fire();
                 }
-                spaceHeld = true;
+                event.consume();
             } else {
                 spaceHeld = false;
+                if (!rollButton.isDisabled()) {
+                    event.consume();
+                }
             }
-            event.consume();
         };
         rollButton.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (oldScene != null) {

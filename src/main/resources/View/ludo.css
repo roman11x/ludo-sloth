@@ -369,6 +369,21 @@
     -fx-fill: #1a1a1a;
 }
 
+/* A piece the player can choose: dashed dark ring (solid and thicker while focused) and a hand cursor. */
+.board-piece-ring {
+    -fx-fill: transparent;
+    -fx-stroke: #1a1a1a;
+    -fx-stroke-width: 3;
+}
+
+.board-piece-selectable {
+    -fx-cursor: hand;
+}
+
+.board-piece-selectable:focused .board-piece-ring {
+    -fx-stroke-width: 5;
+}
+
 /* ---------- Game Results screen ---------- */
 
 .results-winner-line {
