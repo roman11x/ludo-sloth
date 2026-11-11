@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import Controller.GameController;
+import Controller.HistoryController;
 import Controller.MainMenuController;
 import Controller.ResultsController;
 import Controller.SetupController;
@@ -70,7 +71,8 @@ public class LudoApp extends Application {
             history.showNoGames();
             showScreen.accept(history.getRoot());
         } else if (launchArgs.contains("--dev-history")) {
-            showScreen.accept(new HistoryView().getRoot());
+            // The real history file, read through HistoryController
+            new HistoryController(showScreen, mainMenu::show).show();
         } else if (launchArgs.contains("--dev-results-save-error")) {
             // A random game played to the end at once; the "history file" is a folder, so saving fails
             new ResultsController(showScreen, mainMenu::show, newGame,
