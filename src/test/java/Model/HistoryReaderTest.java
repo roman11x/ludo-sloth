@@ -72,4 +72,26 @@ public class HistoryReaderTest {
         assertTrue(e.getMessage().contains(malformedId));
     }
 
+    @Test
+    void courseTemplateFileIsReadable(@TempDir Path tempDir) throws IOException, HistoryReader.CorruptHistoryException {
+        Path file = tempDir.resolve("course.csv");
+        var courseTemplate =
+                "gameID,difficulty,timestamp(DD/MM/YYYY; HH:MM:SS),1st_place_name,2nd_place_name,3rd_place_name,4rd_place_name,game_duration(HH:MM:SS)\r\n"
+                        + "1,hard,19/10/2026;12:01:00 ,Mor,Noy,Safa,Muhammed,01:05:04";
+        var expectedRecord = new GameRecord(1, Difficulty.HARD,
+                LocalDateTime.of(2026, 10, 19, 12, 1, 0),
+                List.of("Mor", "Noy", "Safa", "Muhammed"),
+                Duration.ofHours(1).plusMinutes(5).plusSeconds(4));
+
+        Files.writeString(file, courseTemplate);
+
+        var reader = new HistoryReader(file);
+        List<GameRecord> games = reader.readAll();
+        var contents = Files.readString(file);
+
+
+        assertEquals(courseTemplate, contents);
+        assertEquals(List.of(expectedRecord), games);
+    }
+
 }
