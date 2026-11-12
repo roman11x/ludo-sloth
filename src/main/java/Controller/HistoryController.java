@@ -64,7 +64,7 @@ public class HistoryController {
         } catch (HistoryReader.CorruptHistoryException e) {
             view.showLoadError(e.getMessage());
             return;
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException e) {
             view.showLoadError(UNREADABLE_MESSAGE);
             return;
         }
