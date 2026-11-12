@@ -112,12 +112,16 @@ public class ResultsController {
         show(game);
     }
 
+    /**
+     * Returns whether the game was saved. HistoryWriter reports every file problem as an
+     * IOException; anything else is a programming error and is not hidden as "Not saved".
+     */
     private boolean save(Game game, List<String> rankedNames) {
+        GameRecord record = new GameRecord(DIFFICULTY, game.startTime(), rankedNames, game.duration());
         try {
-            new HistoryWriter(historyFile).saveRecord(
-                    new GameRecord(DIFFICULTY, game.startTime(), rankedNames, game.duration()));
+            new HistoryWriter(historyFile).saveRecord(record);
             return true;
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException e) {
             return false;
         }
     }

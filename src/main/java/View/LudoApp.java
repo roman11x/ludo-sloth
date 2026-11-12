@@ -79,8 +79,11 @@ public class LudoApp extends Application {
                     Path.of(System.getProperty("java.io.tmpdir")))
                     .showRandomGame(sampleNames, sampleColours);
         } else if (launchArgs.contains("--dev-results")) {
-            // A random game played to the end at once and saved to the real history file
-            new ResultsController(showScreen, mainMenu::show, newGame).showRandomGame(sampleNames, sampleColours);
+            // A random game played to the end at once and saved to a preview file in the temp folder,
+            // never to the real history file
+            new ResultsController(showScreen, mainMenu::show, newGame,
+                    Path.of(System.getProperty("java.io.tmpdir"), "Ludo Sloth preview", "history.csv"))
+                    .showRandomGame(sampleNames, sampleColours);
         } else if (launchArgs.contains("--dev-board")) {
             // A real Easy game with four sample players, before Start Game is wired; Results open at the end
             BoardView board = new BoardView();

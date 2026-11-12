@@ -67,9 +67,21 @@ public class BoardView {
     private static final double[] CASTLE_SLOT_X = {84, 156};
     private static final double[] CASTLE_SLOT_Y = {104, 176};
     private static final double SQUARE_PIECE_RADIUS = 15;
-    private static final double STACKED_PIECE_RADIUS = 9.5;
+    private static final double CASTLE_RING_GAP = 4;
+    // A lone piece's ring, at its thickest (focused), still ends inside the square
+    private static final double RING_GAP = 2.5;
+    // Pieces sharing a square are drawn smaller, each with its selectable ring on its own edge, so
+    // a piece, its outline and its ring stay inside its own part of the square:
+    // two to four in a 2x2 grid, five to seven (allowed on protected and Start squares) in rows of
+    // three with the last row centred.
+    private static final double CROWDED_RING_WIDTH = 2;
+    private static final double STACKED_PIECE_RADIUS = 8.5;
     private static final double STACK_OFFSET = 10;
-    private static final double RING_GAP = 4;
+    private static final long STACKED_FONT_SIZE = 8;
+    private static final int DENSE_COLUMNS = 3;
+    private static final double DENSE_SPACING = CELL / DENSE_COLUMNS;
+    private static final double DENSE_RADIUS = 5;
+    private static final long DENSE_FONT_SIZE = 8;
 
     private final StackPane root;
     private final DiceView diceView = new DiceView();
@@ -302,19 +314,26 @@ public class BoardView {
                 boolean right = node.column - originColumn >= CASTLE_CELLS / 2;
                 boolean bottom = node.row - originRow >= CASTLE_CELLS / 2;
                 node.place(originColumn * CELL + CASTLE_SLOT_X[right ? 1 : 0],
-                        originRow * CELL + CASTLE_SLOT_Y[bottom ? 1 : 0], CASTLE_PIECE_RADIUS);
+                        originRow * CELL + CASTLE_SLOT_Y[bottom ? 1 : 0], CASTLE_PIECE_RADIUS, CASTLE_RING_GAP);
                 continue;
             }
             List<PieceNode> together = bySquare.get(node.row + "," + node.column);
             double centreX = node.column * CELL + CELL / 2;
             double centreY = node.row * CELL + CELL / 2;
+            int slot = together.indexOf(node);
             if (together.size() == 1) {
-                node.place(centreX, centreY, SQUARE_PIECE_RADIUS);
-            } else {
-                int slot = together.indexOf(node);
+                node.place(centreX, centreY, SQUARE_PIECE_RADIUS, RING_GAP);
+            } else if (together.size() <= 4) {
                 double dx = (slot % 2 == 0 ? -1 : 1) * STACK_OFFSET;
                 double dy = (slot < 2 ? -1 : 1) * STACK_OFFSET;
-                node.place(centreX + dx, centreY + dy, STACKED_PIECE_RADIUS);
+                node.placeCrowded(centreX + dx, centreY + dy, STACKED_PIECE_RADIUS, STACKED_FONT_SIZE);
+            } else {
+                int rows = (together.size() + DENSE_COLUMNS - 1) / DENSE_COLUMNS;
+                int rowIndex = slot / DENSE_COLUMNS;
+                int inRow = Math.min(DENSE_COLUMNS, together.size() - rowIndex * DENSE_COLUMNS);
+                double dx = (slot % DENSE_COLUMNS - (inRow - 1) / 2.0) * DENSE_SPACING;
+                double dy = (rowIndex - (rows - 1) / 2.0) * DENSE_SPACING;
+                node.placeCrowded(centreX + dx, centreY + dy, DENSE_RADIUS, DENSE_FONT_SIZE);
             }
         }
     }
@@ -599,12 +618,18 @@ public class BoardView {
             this.number = number;
             ring.getStyleClass().add("board-piece-ring");
             ring.setVisible(false);
+            ring.setMouseTransparent(true);
             disc.getStyleClass().addAll("player-circle", "player-" + COLOURS[colourIndex]);
             label = new Text(String.valueOf(number));
             label.getStyleClass().addAll("board-piece-number", "board-piece-number-" + COLOURS[colourIndex]);
             getChildren().addAll(ring, disc, label);
             getStyleClass().add("board-piece");
             setFocusTraversable(false);
+            // Clicks count only on the piece's circles, not its square bounds, so neighbouring
+            // pieces in a shared square never take each other's clicks
+            setPickOnBounds(false);
+            // Exact positions: pixel snapping would shift pieces by a fraction towards their neighbours
+            setSnapToPixel(false);
             // Dashed ring while selectable, solid while focused, so focus is visible without colour
             focusedProperty().addListener((obs, was, focused) -> updateRing());
             updateRing();
@@ -622,11 +647,28 @@ public class BoardView {
             updateAccessibleText();
         }
 
-        private void place(double centreX, double centreY, double radius) {
+        /** A piece with its selectable ring drawn around it, a small gap outside its edge. */
+        private void place(double centreX, double centreY, double radius, double ringGap) {
+            getChildren().setAll(ring, disc, label);
+            ring.setStyle("");
+            layOut(centreX, centreY, radius, radius + ringGap, Math.round(radius * 0.8));
+        }
+
+        /**
+         * A smaller piece in a shared square: the selectable ring is drawn on the piece's own edge
+         * (on top of it) so it never reaches a neighbouring piece.
+         */
+        private void placeCrowded(double centreX, double centreY, double radius, long fontSize) {
+            getChildren().setAll(disc, ring, label);
+            ring.setStyle("-fx-stroke-width: " + CROWDED_RING_WIDTH + ";");
+            layOut(centreX, centreY, radius, radius, fontSize);
+        }
+
+        private void layOut(double centreX, double centreY, double radius, double ringRadius, long fontSize) {
             disc.setRadius(radius);
-            ring.setRadius(radius + RING_GAP);
-            label.setStyle("-fx-font-size: " + Math.round(radius * 0.8) + "px;");
-            double size = 2 * (radius + RING_GAP + 3);
+            ring.setRadius(ringRadius);
+            label.setStyle("-fx-font-size: " + fontSize + "px;");
+            double size = 2 * (ringRadius + 3);
             setMinSize(size, size);
             setPrefSize(size, size);
             setMaxSize(size, size);
