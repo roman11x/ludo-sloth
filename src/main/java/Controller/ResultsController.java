@@ -1,6 +1,5 @@
 package Controller;
 
-import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +11,6 @@ import java.util.function.Consumer;
 import Model.Difficulty;
 import Model.Game;
 import Model.GameRecord;
-import Model.HistoryWriter;
 import Model.MoveCandidate;
 import Model.Player;
 import View.ResultsView;
@@ -33,6 +31,7 @@ public class ResultsController {
     private final Path historyFile;
     private final ResultsView view = new ResultsView();
     private Game shownGame;
+    private ResultSave pendingSave;
 
     /**
      * Saves to the standard history file, {@link HistoryFile#path()}.
@@ -52,8 +51,12 @@ public class ResultsController {
                              Path historyFile) {
         this.showScreen = Objects.requireNonNull(showScreen, "showScreen");
         this.historyFile = Objects.requireNonNull(historyFile, "historyFile");
-        view.setOnMainMenu(Objects.requireNonNull(onMainMenu, "onMainMenu"));
-        view.setOnNewGame(Objects.requireNonNull(onNewGame, "onNewGame"));
+        Runnable mainMenu = Objects.requireNonNull(onMainMenu, "onMainMenu");
+        Runnable newGame = Objects.requireNonNull(onNewGame, "onNewGame");
+        view.setOnMainMenu(() -> navigate(mainMenu));
+        view.setOnNewGame(() -> navigate(newGame));
+        view.setOnRetry(this::retrySave);
+        WindowCloseGuard.register(view.getRoot(), this::requestLeave);
     }
 
     /**
@@ -83,7 +86,9 @@ public class ResultsController {
                 colours.add(GameController.colourName(player.color()));
             }
             view.showResults(names, colours, game.duration().toSeconds(), difficultyName());
-            view.setSaveStatus(save(game, names));
+            pendingSave = new ResultSave(
+                    new GameRecord(DIFFICULTY, game.startTime(), names, game.duration()), historyFile);
+            retrySave();
         } else if (shownGame != game) {
             throw new IllegalStateException("These results already show another game");
         }
@@ -112,17 +117,28 @@ public class ResultsController {
         show(game);
     }
 
-    /**
-     * Returns whether the game was saved. HistoryWriter reports every file problem as an
-     * IOException; anything else is a programming error and is not hidden as "Not saved".
-     */
-    private boolean save(Game game, List<String> rankedNames) {
-        GameRecord record = new GameRecord(DIFFICULTY, game.startTime(), rankedNames, game.duration());
-        try {
-            new HistoryWriter(historyFile).saveRecord(record);
-            return true;
-        } catch (IOException e) {
-            return false;
+    private boolean retrySave() {
+        if (pendingSave == null) return false;
+        boolean saved = pendingSave.save();
+        view.setSaveStatus(saved);
+        return saved;
+    }
+
+    private void navigate(Runnable action) {
+        if (requestLeave()) action.run();
+    }
+
+    /** Shared by Main Menu, New Game and the application's window-close request. */
+    private boolean requestLeave() {
+        if (pendingSave == null || pendingSave.isSaved()) return true;
+        while (true) {
+            switch (view.confirmUnsavedResults()) {
+                case STAY: return false;
+                case LEAVE: return true;
+                case RETRY:
+                    if (retrySave()) return true;
+                    // A failed retry leaves results intact and offers the same choices again.
+            }
         }
     }
 

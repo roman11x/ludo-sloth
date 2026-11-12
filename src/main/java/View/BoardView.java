@@ -14,6 +14,10 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Group;
 import javafx.scene.Parent;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseButton;
@@ -85,6 +89,7 @@ public class BoardView {
 
     private final StackPane root;
     private final DiceView diceView = new DiceView();
+    private final Button mainMenuButton = new Button("Back to Main Menu");
     private final Label turnLine = new Label();
     private final Circle turnCircle = new Circle(9);
     private final Label turnColour = new Label();
@@ -123,7 +128,10 @@ public class BoardView {
         message.setWrapText(true);
         VBox messageBox = new VBox(6, text("Messages", "ludo-section-label"), message);
         messageBox.getStyleClass().add("ludo-panel");
-        VBox side = new VBox(16, diceView.getRoot(), messageBox);
+        mainMenuButton.getStyleClass().addAll("ludo-button", "ludo-button-secondary", "ludo-button-compact");
+        mainMenuButton.setMaxWidth(Double.MAX_VALUE);
+        mainMenuButton.setDisable(true);
+        VBox side = new VBox(16, diceView.getRoot(), messageBox, mainMenuButton);
         side.setMinWidth(SIDE_WIDTH);
         side.setPrefWidth(SIDE_WIDTH);
         side.setMaxWidth(SIDE_WIDTH);
@@ -155,6 +163,32 @@ public class BoardView {
      */
     public DiceView getDiceView() {
         return diceView;
+    }
+
+    public void setOnMainMenu(Runnable action) {
+        mainMenuButton.setOnAction(action == null ? null : event -> action.run());
+        mainMenuButton.setDisable(action == null);
+    }
+
+    /** Avoid leaving while an outstanding roll animation is resolving a move. */
+    public void setMainMenuEnabled(boolean enabled) {
+        mainMenuButton.setDisable(!enabled || mainMenuButton.getOnAction() == null);
+    }
+
+    public boolean confirmLeaveGame() {
+        ButtonType leave = new ButtonType("Leave game", ButtonBar.ButtonData.OK_DONE);
+        ButtonType keep = new ButtonType("Keep playing", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
+                "This game is still in progress. Returning to the main menu will end it without saving a result.",
+                leave, keep);
+        alert.setTitle("Leave game");
+        alert.setHeaderText("Return to the main menu?");
+        if (root.getScene() != null && root.getScene().getWindow() != null) {
+            alert.initOwner(root.getScene().getWindow());
+        }
+        ((Button) alert.getDialogPane().lookupButton(leave)).setDefaultButton(false);
+        ((Button) alert.getDialogPane().lookupButton(keep)).setDefaultButton(true);
+        return alert.showAndWait().orElse(keep) == leave;
     }
 
     /**
