@@ -1,6 +1,9 @@
 package View;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Function;
 
 import javafx.beans.binding.Bindings;
@@ -32,14 +35,8 @@ public class HistoryView {
     private static final double HEADER_FONT_SIZE = 14;
     private static final double HEADER_PADDING = 20;
 
-    // Sample history shown until HistoryController supplies the real records; newest first
-    private static final List<GameRow> SAMPLE_GAMES = List.of(
-            new GameRow("6", "07/11/2026 20:15", "Easy", "Maya", "Noa", "Daniel", "Omer", "00:42:17"),
-            new GameRow("5", "07/11/2026 18:40", "Easy", "Noa", "Maya", "", "", "00:18:05"),
-            new GameRow("4", "05/11/2026 21:02", "Easy", "Omer", "Noa", "Daniel", "", "00:31:48"),
-            new GameRow("3", "03/11/2026 19:30", "Easy", "Daniel", "Maya", "", "", "00:15:22"),
-            new GameRow("2", "01/11/2026 17:45", "Easy", "Maya", "Omer", "Daniel", "Noa", "00:47:09"),
-            new GameRow("1", "30/10/2026 20:10", "Easy", "Noa", "Daniel", "Maya", "", "00:28:56"));
+    private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final int PLACE_COLUMNS = 4;
 
     private final StackPane root;
     private final StackPane listArea;
@@ -67,7 +64,6 @@ public class HistoryView {
         table.setMinHeight(MIN_TABLE_HEIGHT);
         table.prefHeightProperty().bind(Bindings.size(table.getItems()).multiply(ROW_HEIGHT).add(HEADER_HEIGHT));
         table.setAccessibleText("Completed games, newest first");
-        table.getItems().setAll(SAMPLE_GAMES);
         listArea = new StackPane(table);
 
         backButton = new Button("Back to Main Menu");
@@ -96,6 +92,40 @@ public class HistoryView {
      */
     public void setOnBack(Runnable action) {
         backButton.setOnAction(action == null ? null : event -> action.run());
+    }
+
+    /**
+     * Adds one completed game as the next table row (call newest first) and shows the table.
+     *
+     * @param gameNumber      the game's number in the history
+     * @param startTime       when the game started, shown as DD/MM/YYYY HH:MM
+     * @param difficulty      the difficulty as shown to the player, e.g. "Easy"
+     * @param rankedNames     the players in finishing order, 1st place first (2 to 4 names);
+     *                        unused places are shown empty
+     * @param durationSeconds the game's duration, shown as HH:MM:SS
+     */
+    public void addGame(int gameNumber, LocalDateTime startTime, String difficulty,
+                        List<String> rankedNames, long durationSeconds) {
+        if (rankedNames.size() > PLACE_COLUMNS) {
+            throw new IllegalArgumentException("At most " + PLACE_COLUMNS + " places");
+        }
+        String[] places = new String[PLACE_COLUMNS];
+        for (int i = 0; i < PLACE_COLUMNS; i++) {
+            places[i] = i < rankedNames.size() ? rankedNames.get(i) : "";
+        }
+        long seconds = Math.max(0, durationSeconds);
+        String duration = String.format(Locale.ROOT, "%02d:%02d:%02d", seconds / 3600, (seconds / 60) % 60, seconds % 60);
+        table.getItems().add(new GameRow(String.valueOf(gameNumber), startTime.format(DATE_TIME_FORMAT),
+                difficulty, places[0], places[1], places[2], places[3], duration));
+        listArea.getChildren().setAll(table);
+    }
+
+    /**
+     * Removes all rows and shows the (empty) table again.
+     */
+    public void clearGames() {
+        table.getItems().clear();
+        listArea.getChildren().setAll(table);
     }
 
     /**
