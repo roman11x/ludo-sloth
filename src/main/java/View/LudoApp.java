@@ -73,9 +73,10 @@ public class LudoApp extends Application {
         } else if (launchArgs.contains("--dev-results")) {
             return new ResultsView().getRoot();
         } else if (launchArgs.contains("--dev-board")) {
-            // The board with Roll working through GameController, before Start Game is wired
+            // A real Easy game with four sample players, before Start Game is wired
             BoardView board = new BoardView();
-            new GameController(board);
+            new GameController(board, List.of("Maya", "Daniel", "Noa", "Omer"),
+                    List.of("Red", "Green", "Yellow", "Blue"));
             return board.getRoot();
         } else if (launchArgs.contains("--dev-setup")) {
             return new SetupView().getRoot();
