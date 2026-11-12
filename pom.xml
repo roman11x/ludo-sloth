@@ -27,31 +27,6 @@
             <artifactId>javafx-controls</artifactId> <!-- UI controls; brings javafx-base and javafx-graphics with it -->
             <version>${javafx.version}</version> <!-- uses the property above -->
         </dependency>
-        <!-- javafx-graphics holds the native code; one entry per OS so a single JAR runs everywhere -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-graphics</artifactId>
-            <version>${javafx.version}</version>
-            <classifier>win</classifier> <!-- Windows natives -->
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-graphics</artifactId>
-            <version>${javafx.version}</version>
-            <classifier>mac-aarch64</classifier> <!-- Apple Silicon natives -->
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-graphics</artifactId>
-            <version>${javafx.version}</version>
-            <classifier>mac</classifier> <!-- Intel Mac natives, in case a grader uses one -->
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-graphics</artifactId>
-            <version>${javafx.version}</version>
-            <classifier>linux</classifier> <!-- Linux natives -->
-        </dependency>
     </dependencies>
 
     <build> <!-- configuration for how the project is built -->
@@ -67,7 +42,7 @@
                 <version>0.0.8</version> <!-- latest release -->
                 <configuration>
                     <mainClass>View.Main</mainClass> <!-- class to start; must match the launcher you create -->
-                    <runtimePathOption>CLASSPATH</runtimePathOption> <!-- classpath, like the fat JAR: JavaFX picks this OS's natives itself instead of the first javafx-graphics jar on the module path -->
+                    <runtimePathOption>CLASSPATH</runtimePathOption> <!-- Local runs use only the host-platform dependencies selected by OpenJFX. -->
                 </configuration>
             </plugin>
             <plugin>
@@ -81,6 +56,14 @@
                             <goal>shade</goal> <!-- the goal that builds the fat JAR -->
                         </goals>
                         <configuration>
+                            <!-- Distribution-only natives must not enter javafx:run's classpath:
+                                 Intel and Apple Silicon use the same dylib names. -->
+                            <extraArtifacts>
+                                <extraArtifact>org.openjfx:javafx-graphics:jar:win:${javafx.version}</extraArtifact>
+                                <extraArtifact>org.openjfx:javafx-graphics:jar:mac-aarch64:${javafx.version}</extraArtifact>
+                                <extraArtifact>org.openjfx:javafx-graphics:jar:mac:${javafx.version}</extraArtifact>
+                                <extraArtifact>org.openjfx:javafx-graphics:jar:linux:${javafx.version}</extraArtifact>
+                            </extraArtifacts>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact> <!-- apply to every dependency -->

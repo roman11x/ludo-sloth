@@ -7,7 +7,10 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.HBox;
@@ -32,6 +35,9 @@ public class ResultsView {
     private final Label durationValue = text("", "results-info-value");
     private final Label difficultyValue = text("", "results-info-value");
     private final HBox saveStatus = new HBox(10);
+    private final Button retryButton = new Button("Retry saving");
+
+    public enum LeaveChoice { RETRY, STAY, LEAVE }
     private final Button menuButton;
     private final Button newGameButton;
 
@@ -50,6 +56,10 @@ public class ResultsView {
         saveStatus.setAlignment(Pos.CENTER_LEFT);
         saveStatus.setVisible(false);
         saveStatus.setManaged(false);
+        retryButton.getStyleClass().addAll("ludo-button", "ludo-button-compact");
+        retryButton.setMinWidth(Region.USE_PREF_SIZE);
+        retryButton.setVisible(false);
+        retryButton.setManaged(false);
 
         // Secondary action on the left, primary action on the right
         menuButton = new Button("Main Menu");
@@ -102,6 +112,27 @@ public class ResultsView {
         newGameButton.setOnAction(action == null ? null : event -> action.run());
     }
 
+    public void setOnRetry(Runnable action) {
+        retryButton.setOnAction(action == null ? null : event -> action.run());
+    }
+
+    /** UI only: the controller performs retries and decides whether navigation proceeds. */
+    public LeaveChoice confirmUnsavedResults() {
+        ButtonType retry = new ButtonType("Retry saving", ButtonBar.ButtonData.YES);
+        ButtonType stay = new ButtonType("Stay here", ButtonBar.ButtonData.CANCEL_CLOSE);
+        ButtonType leave = new ButtonType("Continue without saving", ButtonBar.ButtonData.NO);
+        Alert alert = new Alert(Alert.AlertType.WARNING,
+                "Your game results have not been saved. Leaving now will lose them.", retry, stay, leave);
+        alert.setTitle("Unsaved game results");
+        alert.setHeaderText("Save results before leaving?");
+        if (root.getScene() != null && root.getScene().getWindow() != null) {
+            alert.initOwner(root.getScene().getWindow());
+        }
+        ButtonType chosen = alert.showAndWait().orElse(stay);
+        if (chosen == retry) return LeaveChoice.RETRY;
+        return chosen == leave ? LeaveChoice.LEAVE : LeaveChoice.STAY;
+    }
+
     /**
      * Shows the final results. {@code names} and {@code colours} ("Red", "Green", "Yellow" or
      * "Blue") are in finishing order, first place first, one entry per player (2 to 4).
@@ -140,7 +171,9 @@ public class ResultsView {
                 "results-status-text");
         message.setWrapText(true);
         HBox.setHgrow(message, Priority.ALWAYS);
-        saveStatus.getChildren().setAll(tag, message);
+        retryButton.setVisible(!saved);
+        retryButton.setManaged(!saved);
+        saveStatus.getChildren().setAll(tag, message, retryButton);
         saveStatus.getStyleClass().setAll("results-status", saved ? "results-status-saved" : "results-status-failed");
         saveStatus.setAccessibleText(message.getText());
     }

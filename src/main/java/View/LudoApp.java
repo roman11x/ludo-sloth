@@ -9,6 +9,7 @@ import Controller.HistoryController;
 import Controller.MainMenuController;
 import Controller.ResultsController;
 import Controller.SetupController;
+import Controller.WindowCloseGuard;
 import javafx.application.Application;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -37,6 +38,9 @@ public class LudoApp extends Application {
         }
         // Attach the scene to the window
         stage.setScene(scene);
+        stage.setOnCloseRequest(event -> {
+            if (!WindowCloseGuard.canClose(scene.getRoot())) event.consume();
+        });
         // Never let the window shrink below the size the menu needs, so nothing is cut off
         stage.setMinWidth(500);
         stage.setMinHeight(480);
@@ -85,9 +89,10 @@ public class LudoApp extends Application {
                     Path.of(System.getProperty("java.io.tmpdir"), "Ludo Sloth preview", "history.csv"))
                     .showRandomGame(sampleNames, sampleColours);
         } else if (launchArgs.contains("--dev-board")) {
-            // A real Easy game with four sample players, before Start Game is wired; Results open at the end
+            // A real Easy game with four sample players; Results open at the end
             BoardView board = new BoardView();
             GameController game = new GameController(board, sampleNames, sampleColours);
+            game.setOnMainMenu(mainMenu::show);
             new ResultsController(showScreen, mainMenu::show, newGame).showWhenOver(game);
             showScreen.accept(board.getRoot());
         } else if (launchArgs.contains("--dev-setup")) {
