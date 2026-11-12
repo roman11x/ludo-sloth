@@ -10,7 +10,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class HistoryReaderTest {
 
@@ -38,6 +38,38 @@ public class HistoryReaderTest {
                 Duration.ofHours(2).plusMinutes(34).plusSeconds(56));
 
         assertEquals(List.of(expected2, expected1), games);
+    }
+
+    @Test
+    void missingFileIsCreatedWithHeaderAndReturnsNoGames(@TempDir Path tempDir) throws HistoryReader.CorruptHistoryException, IOException {
+        Path file = tempDir.resolve("test.csv");
+        var reader = new HistoryReader(file);
+
+        List<GameRecord> games = reader.readAll();
+        List<String> lines = Files.readAllLines(file);
+
+
+        assertEquals(List.of(HEADER), lines);
+        assertTrue(games.isEmpty());
+    }
+
+    @Test
+    void malformedHistoryThrowsErrorWithoutOverwritingFile(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("test.csv");
+
+        Files.write(file, List.of(HEADER, "1,easy,12/11/2026; 14:23:37,Roman,Maor,,,02:34:56",
+                "-2,easy,12/11/2026; 14:30:37,Roman,Maor,,,02:34:56"));
+        var malformedId = "-2";
+
+        List<String> expectedLines = Files.readAllLines(file);
+        var reader = new HistoryReader(file);
+
+        var e = assertThrows(HistoryReader.CorruptHistoryException.class,
+                reader::readAll);
+        var actualLines = Files.readAllLines(file);
+
+        assertEquals(expectedLines, actualLines);
+        assertTrue(e.getMessage().contains(malformedId));
     }
 
 }
