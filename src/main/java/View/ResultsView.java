@@ -1,5 +1,8 @@
 package View;
 
+import java.util.List;
+import java.util.Locale;
+
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -23,38 +26,30 @@ public class ResultsView {
     private static final String[] PLACES = {"1st", "2nd", "3rd", "4th"};
     private static final double CONTENT_WIDTH = 520;
 
-    // Sample game shown until ResultsController supplies the real one; lists are in finishing order
-    private static final String[] SAMPLE_NAMES = {"Maya", "Noa", "Daniel", "Omer"};
-    private static final int[] SAMPLE_COLOURS = {0, 2, 1, 3};
-    private static final String SAMPLE_DURATION = "00:42:17";
-    private static final String SAMPLE_DIFFICULTY = "Easy";
-
     private final ScrollPane root;
+    private final HBox winnerLine = new HBox(10);
+    private final VBox ranking = new VBox(6);
+    private final Label durationValue = text("", "results-info-value");
+    private final Label difficultyValue = text("", "results-info-value");
     private final HBox saveStatus = new HBox(10);
     private final Button menuButton;
     private final Button newGameButton;
 
     public ResultsView() {
-        // Title and winner line
+        // Title and winner line (filled in by showResults)
         Label title = text("Game Over", "ludo-screen-title");
-        HBox winnerLine = new HBox(10, colourCircle(SAMPLE_COLOURS[0], 12),
-                text(SAMPLE_NAMES[0] + " wins!", "results-winner-line"));
         winnerLine.setAlignment(Pos.CENTER);
         VBox titleBox = new VBox(4, title, winnerLine);
         titleBox.setAlignment(Pos.CENTER);
 
-        // Final ranking, first place first
-        VBox ranking = new VBox(6);
-        for (int place = 0; place < SAMPLE_NAMES.length; place++) {
-            ranking.getChildren().add(rankingRow(place, SAMPLE_NAMES[place], SAMPLE_COLOURS[place]));
-        }
-
         // Duration and difficulty side by side
-        HBox info = new HBox(40, infoItem("Duration", SAMPLE_DURATION), infoItem("Difficulty", SAMPLE_DIFFICULTY));
+        HBox info = new HBox(40, infoItem("Duration", durationValue), infoItem("Difficulty", difficultyValue));
         info.setAlignment(Pos.CENTER);
 
+        // Save line, hidden until the save outcome is known
         saveStatus.setAlignment(Pos.CENTER_LEFT);
-        setSaveStatus(true);
+        saveStatus.setVisible(false);
+        saveStatus.setManaged(false);
 
         // Secondary action on the left, primary action on the right
         menuButton = new Button("Main Menu");
@@ -108,10 +103,35 @@ public class ResultsView {
     }
 
     /**
+     * Shows the final results. {@code names} and {@code colours} ("Red", "Green", "Yellow" or
+     * "Blue") are in finishing order, first place first, one entry per player (2 to 4).
+     *
+     * @param durationSeconds the game's duration, shown as HH:MM:SS
+     * @param difficulty      the difficulty as shown to the player, e.g. "Easy"
+     */
+    public void showResults(List<String> names, List<String> colours, long durationSeconds, String difficulty) {
+        if (names.size() != colours.size() || names.isEmpty() || names.size() > PLACES.length) {
+            throw new IllegalArgumentException("Need 1 to 4 players, each with exactly one colour");
+        }
+        int winnerColour = colourIndex(colours.getFirst());
+        winnerLine.getChildren().setAll(colourCircle(winnerColour, 12),
+                text(names.getFirst() + " wins!", "results-winner-line"));
+        ranking.getChildren().clear();
+        for (int place = 0; place < names.size(); place++) {
+            ranking.getChildren().add(rankingRow(place, names.get(place), colourIndex(colours.get(place))));
+        }
+        long seconds = Math.max(0, durationSeconds);
+        durationValue.setText(String.format(Locale.ROOT, "%02d:%02d:%02d", seconds / 3600, (seconds / 60) % 60, seconds % 60));
+        difficultyValue.setText(difficulty);
+    }
+
+    /**
      * Shows whether the finished game was saved to the history. A failure only changes this line;
      * the results stay on screen.
      */
     public void setSaveStatus(boolean saved) {
+        saveStatus.setVisible(true);
+        saveStatus.setManaged(true);
         Label tag = text(saved ? "Saved" : "Not saved", saved ? "results-tag-outline" : "ludo-tag");
         tag.setMinWidth(Region.USE_PREF_SIZE);
         Label message = text(saved
@@ -149,10 +169,19 @@ public class ResultsView {
         return row;
     }
 
-    private static VBox infoItem(String caption, String value) {
-        VBox item = new VBox(0, text(caption, "ludo-hint"), text(value, "results-info-value"));
+    private static VBox infoItem(String caption, Label value) {
+        VBox item = new VBox(0, text(caption, "ludo-hint"), value);
         item.setAlignment(Pos.CENTER);
         return item;
+    }
+
+    private static int colourIndex(String colour) {
+        for (int i = 0; i < COLOUR_NAMES.length; i++) {
+            if (COLOUR_NAMES[i].equalsIgnoreCase(colour)) {
+                return i;
+            }
+        }
+        throw new IllegalArgumentException("Unknown colour: " + colour);
     }
 
     private static Circle colourCircle(int colour, double radius) {

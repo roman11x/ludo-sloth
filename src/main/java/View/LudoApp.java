@@ -1,10 +1,13 @@
 package View;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
 
 import Controller.GameController;
 import Controller.MainMenuController;
+import Controller.ResultsController;
+import Controller.SetupController;
 import javafx.application.Application;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -27,11 +30,9 @@ public class LudoApp extends Application {
         // Screens switch by replacing the scene's root, so the window keeps its size and maximised state
         Consumer<Parent> showScreen = scene::setRoot;
         // Show the first screen: a screen picked for development, or the Main Menu
-        Parent devScreen = devScreen(getParameters().getRaw());
-        if (devScreen != null) {
-            showScreen.accept(devScreen);
-        } else {
-            new MainMenuController(showScreen).show();
+        MainMenuController mainMenu = new MainMenuController(showScreen);
+        if (!showDevScreen(getParameters().getRaw(), showScreen, mainMenu)) {
+            mainMenu.show();
         }
         // Attach the scene to the window
         stage.setScene(scene);
@@ -46,42 +47,53 @@ public class LudoApp extends Application {
      * Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-results,
      * --dev-results-save-error, --dev-history, --dev-history-empty or --dev-history-error
      * opens that screen directly instead of the Main Menu.
-     * Returns {@code null} for a normal launch.
+     * Returns {@code false} for a normal launch.
      */
-    private static Parent devScreen(List<String> launchArgs) {
+    private static boolean showDevScreen(List<String> launchArgs, Consumer<Parent> showScreen,
+                                         MainMenuController mainMenu) {
+        List<String> sampleNames = List.of("Maya", "Daniel", "Noa", "Omer");
+        List<String> sampleColours = List.of("Red", "Green", "Yellow", "Blue");
+        Runnable newGame = () -> new SetupController(showScreen, mainMenu::show).show();
         if (launchArgs.contains("--dev-history-error")) {
             HistoryView history = new HistoryView();
             history.showLoadError("Line 4 of the history file cannot be read: "
                     + "the difficulty \"expert\" is not Easy, Medium or Hard.");
-            return history.getRoot();
+            showScreen.accept(history.getRoot());
         } else if (launchArgs.contains("--dev-setup-errors")) {
             SetupView setup = new SetupView();
             setup.showValidationMessages(List.of(
                     "Please use unique player names: \"Maya\" is used twice.",
                     "Please enter a name for Player 2."));
-            return setup.getRoot();
+            showScreen.accept(setup.getRoot());
         } else if (launchArgs.contains("--dev-history-empty")) {
             HistoryView history = new HistoryView();
             history.showNoGames();
-            return history.getRoot();
+            showScreen.accept(history.getRoot());
         } else if (launchArgs.contains("--dev-history")) {
-            return new HistoryView().getRoot();
+            showScreen.accept(new HistoryView().getRoot());
         } else if (launchArgs.contains("--dev-results-save-error")) {
-            ResultsView results = new ResultsView();
-            results.setSaveStatus(false);
-            return results.getRoot();
+            // A random game played to the end at once; the "history file" is a folder, so saving fails
+            new ResultsController(showScreen, mainMenu::show, newGame,
+                    Path.of(System.getProperty("java.io.tmpdir")))
+                    .showRandomGame(sampleNames, sampleColours);
         } else if (launchArgs.contains("--dev-results")) {
-            return new ResultsView().getRoot();
+            // A random game played to the end at once and saved to a preview file in the temp folder,
+            // never to the real history file
+            new ResultsController(showScreen, mainMenu::show, newGame,
+                    Path.of(System.getProperty("java.io.tmpdir"), "Ludo Sloth preview", "history.csv"))
+                    .showRandomGame(sampleNames, sampleColours);
         } else if (launchArgs.contains("--dev-board")) {
-            // A real Easy game with four sample players, before Start Game is wired
+            // A real Easy game with four sample players, before Start Game is wired; Results open at the end
             BoardView board = new BoardView();
-            new GameController(board, List.of("Maya", "Daniel", "Noa", "Omer"),
-                    List.of("Red", "Green", "Yellow", "Blue"));
-            return board.getRoot();
+            GameController game = new GameController(board, sampleNames, sampleColours);
+            new ResultsController(showScreen, mainMenu::show, newGame).showWhenOver(game);
+            showScreen.accept(board.getRoot());
         } else if (launchArgs.contains("--dev-setup")) {
-            return new SetupView().getRoot();
+            showScreen.accept(new SetupView().getRoot());
+        } else {
+            return false;
         }
-        return null;
+        return true;
     }
 
     public static void main(String[] args) {
