@@ -134,6 +134,17 @@ public class DiceView {
         }
     }
 
+    /** Cancels pending visual callbacks when the game screen is left. */
+    public void stopAnimation() {
+        if (rolling != null) {
+            rolling.stop();
+            rolling = null;
+        }
+        resultBox.setRotate(0);
+        resultBox.getStyleClass().remove("dice-rolling");
+        spaceHeld = false;
+    }
+
     private void settle(int value) {
         String text = String.valueOf(value);
         resultLabel.setText(text);

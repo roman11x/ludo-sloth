@@ -46,6 +46,7 @@ public class GameController {
     private final PauseTransition resultsDelay = new PauseTransition(Duration.seconds(3));
     private Consumer<Game> onGameOver;
     private boolean gameOverReported;
+    private boolean stopped;
     private Player choosingPlayer;
     private TurnRoll choosingRoll;
     private List<MoveCandidate> choosingMoves = List.of();
@@ -98,8 +99,31 @@ public class GameController {
      * Stops the live elapsed-time display, e.g. when the board screen is left.
      */
     public void stop() {
+        if (stopped) return;
+        stopped = true;
         clock.stop();
         resultsDelay.stop();
+        diceView.stopAnimation();
+        diceView.setRollEnabled(false);
+        diceView.setOnRoll(null);
+        boardView.clearSelectablePieces();
+        boardView.setOnPieceChosen(null);
+        boardView.setOnMainMenu(null);
+        choosingPlayer = null;
+        choosingRoll = null;
+        choosingMoves = List.of();
+        choosingText = "";
+    }
+
+    /** Leaving a running game abandons it; only completed games reach ResultsController. */
+    public void setOnMainMenu(Runnable action) {
+        Objects.requireNonNull(action, "action");
+        if (stopped || game.isFinished()) return;
+        boardView.setOnMainMenu(() -> {
+            if (stopped || game.isFinished() || !boardView.confirmLeaveGame()) return;
+            stop();
+            action.run();
+        });
     }
 
     /**
@@ -114,7 +138,7 @@ public class GameController {
     }
 
     private void reportGameOver() {
-        if (onGameOver == null || gameOverReported) {
+        if (stopped || onGameOver == null || gameOverReported) {
             return;
         }
         gameOverReported = true;
@@ -141,9 +165,10 @@ public class GameController {
      * dice area has finished its animation.
      */
     private void roll() {
-        if (game.isFinished() || game.turnManager().phase() != TurnPhase.WAITING_FOR_ROLL) {
+        if (stopped || game.isFinished() || game.turnManager().phase() != TurnPhase.WAITING_FOR_ROLL) {
             return;
         }
+        boardView.setMainMenuEnabled(false);
         Player roller = currentPlayer();
         TurnRoll roll = game.roll();
         List<MoveCandidate> moves = game.legalMoves();
@@ -151,6 +176,8 @@ public class GameController {
     }
 
     private void afterRoll(Player roller, TurnRoll roll, List<MoveCandidate> moves) {
+        if (stopped) return;
+        boardView.setMainMenuEnabled(!game.isFinished());
         String rolled = roller.name() + " rolled " + roll.value() + ".";
         if (roll.cancelled()) {
             endTurn(rolled + " That is a third 6 in a row, so it is cancelled.", roller, roll);
@@ -171,7 +198,7 @@ public class GameController {
     }
 
     private void pieceChosen(String colour, int number) {
-        if (choosingPlayer == null || !colourName(choosingPlayer.color()).equalsIgnoreCase(colour)) {
+        if (stopped || choosingPlayer == null || !colourName(choosingPlayer.color()).equalsIgnoreCase(colour)) {
             return;
         }
         MoveCandidate chosen = choosingMoves.stream()
@@ -238,6 +265,8 @@ public class GameController {
     }
 
     private void showGameOver(String text) {
+        boardView.setMainMenuEnabled(false);
+        diceView.setRollEnabled(false);
         clock.stop();
         showElapsedTime();
         List<Player> ranking = game.ranking();
