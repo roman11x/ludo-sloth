@@ -121,8 +121,51 @@ class GameTest {
     @Test
     void defaultConstructionCreatesAReadyEasyGame() {
         Game game = new Game(List.of(new Player("Green", PlayerColor.GREEN), new Player("Red", PlayerColor.RED)));
+        assertEquals(Difficulty.EASY, game.difficulty());
         assertEquals(8, game.board().occupancy().size());
         assertTrue(game.players().contains(game.turnManager().currentPlayer()));
         assertEquals(TurnPhase.WAITING_FOR_ROLL, game.turnManager().phase());
     }
+
+    @Test
+    void explicitEasyDifficultyCreatesTheExpectedBoardAndRoutes() {
+        List<Player> players = List.of(new Player("Green", PlayerColor.GREEN),
+                new Player("Red", PlayerColor.RED));
+        Game game = new Game(players, Difficulty.EASY);
+        assertEquals(Difficulty.EASY, game.difficulty());
+        assertEquals(8, game.board().occupancy().size());
+        assertEquals(4, game.routes().size());
+        assertEquals(new Position(8, 3), game.board().startFor(PlayerColor.GREEN));
+    }
+
+    @Test
+    void existingInjectedConstructorDefaultsToEasy() {
+        Game game = create(List.of(new Player("Green", PlayerColor.GREEN),
+                new Player("Red", PlayerColor.RED)));
+        assertEquals(Difficulty.EASY, game.difficulty());
+    }
+
+    @Test
+    void explicitDifficultyPreservesInjectedDieAndFirstPlayerSelection() {
+        List<Player> players = List.of(new Player("Green", PlayerColor.GREEN),
+                new Player("Red", PlayerColor.RED));
+        Game game = new Game(players, Difficulty.EASY, () -> 6, new Random(42), new Random(7));
+        assertEquals(Difficulty.EASY, game.difficulty());
+        assertSame(game.players().get(new Random(7).nextInt(2)), game.turnManager().currentPlayer());
+        assertEquals(6, game.roll().value());
+        assertFalse(game.legalMoves().isEmpty());
+    }
+
+    @Test
+    void rejectsNullAndUnsupportedDifficultiesInsteadOfSilentlyCreatingEasy() {
+        List<Player> players = List.of(new Player("Green", PlayerColor.GREEN),
+                new Player("Red", PlayerColor.RED));
+        assertThrows(NullPointerException.class, () -> new Game(players, (Difficulty) null));
+        for (Difficulty difficulty : List.of(Difficulty.MEDIUM, Difficulty.HARD)) {
+            IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                    () -> new Game(players, difficulty));
+            assertTrue(error.getMessage().contains(difficulty.name()));
+        }
+    }
+
 }

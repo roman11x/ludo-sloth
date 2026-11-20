@@ -17,6 +17,7 @@ import java.util.Random;
  * Connecting the UI is a separate implementation step.
  */
 public final class Game {
+    private final Difficulty difficulty;
     private final Board board;
     private final List<Player> players;
     private final Map<PlayerColor, PlayerRoute> routes;
@@ -31,19 +32,40 @@ public final class Game {
     private Duration finalDuration;
 
     public Game(List<Player> players) {
-        this(players, new StandardDie(), new Random(), new Random());
+        this(players, Difficulty.EASY);
+    }
+
+    /** Creates a game at the requested difficulty; currently only Easy is supported. */
+    public Game(List<Player> players, Difficulty difficulty) {
+        this(players, difficulty, new StandardDie(), new Random(), new Random());
     }
 
     /** Separate random sources allow reproducible layouts and first-player tests. */
     public Game(List<Player> players, Die standardDie,
                 Random boardRandom, Random firstPlayerRandom) {
-        this(players, standardDie, boardRandom, firstPlayerRandom,
+        this(players, Difficulty.EASY, standardDie, boardRandom, firstPlayerRandom);
+    }
+
+    /** Explicit difficulty with separate random sources for reproducible tests. */
+    public Game(List<Player> players, Difficulty difficulty, Die standardDie,
+                Random boardRandom, Random firstPlayerRandom) {
+        this(players, difficulty, standardDie, boardRandom, firstPlayerRandom,
                 Clock.systemDefaultZone(), System::nanoTime);
     }
 
     /** Package-visible clock injection for tests; elapsed time must be monotonic. */
     Game(List<Player> players, Die standardDie, Random boardRandom,
          Random firstPlayerRandom, Clock clock, LongSupplier nanoTime) {
+        this(players, Difficulty.EASY, standardDie, boardRandom, firstPlayerRandom, clock, nanoTime);
+    }
+
+    Game(List<Player> players, Difficulty difficulty, Die standardDie, Random boardRandom,
+         Random firstPlayerRandom, Clock clock, LongSupplier nanoTime) {
+        this.difficulty = Objects.requireNonNull(difficulty, "difficulty");
+        if (difficulty != Difficulty.EASY) {
+            throw new IllegalArgumentException("Unsupported game difficulty: " + difficulty
+                    + "; currently only EASY is supported");
+        }
         Objects.requireNonNull(clock, "clock");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         List<Player> participants = List.copyOf(players);
@@ -52,7 +74,7 @@ public final class Game {
         Objects.requireNonNull(firstPlayerRandom, "firstPlayerRandom");
         List<PlayerSetup> setups = participants.stream()
                 .map(player -> new PlayerSetup(player.name(), player.color())).toList();
-        List<String> errors = SetupValidator.validate(setups, Difficulty.EASY);
+        List<String> errors = SetupValidator.validate(setups, difficulty);
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(String.join("; ", errors));
         }
@@ -223,6 +245,11 @@ public final class Game {
     /** Read-only choices from the most recent roll, empty initially or with no move. */
     public List<MoveCandidate> legalMoves() {
         return legalMoves;
+    }
+
+    /** The difficulty chosen when this game was created. */
+    public Difficulty difficulty() {
+        return difficulty;
     }
 
     public Board board() {

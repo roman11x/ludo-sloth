@@ -24,7 +24,6 @@ import javafx.scene.Parent;
  */
 public class ResultsController {
 
-    private static final Difficulty DIFFICULTY = Difficulty.EASY;
     private static final int SAMPLE_GAME_MAX_ROLLS = 100_000;
 
     private final Consumer<Parent> showScreen;
@@ -85,9 +84,9 @@ public class ResultsController {
                 names.add(player.name());
                 colours.add(GameController.colourName(player.color()));
             }
-            view.showResults(names, colours, game.duration().toSeconds(), difficultyName());
+            view.showResults(names, colours, game.duration().toSeconds(), difficultyName(game.difficulty()));
             pendingSave = new ResultSave(
-                    new GameRecord(DIFFICULTY, game.startTime(), names, game.duration()), historyFile);
+                    new GameRecord(game.difficulty(), game.startTime(), names, game.duration()), historyFile);
             retrySave();
         } else if (shownGame != game) {
             throw new IllegalStateException("These results already show another game");
@@ -142,8 +141,8 @@ public class ResultsController {
         }
     }
 
-    private static String difficultyName() {
-        String name = DIFFICULTY.name();
+    private static String difficultyName(Difficulty difficulty) {
+        String name = difficulty.name();
         return name.charAt(0) + name.substring(1).toLowerCase(Locale.ROOT);
     }
 }
