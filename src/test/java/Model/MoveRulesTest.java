@@ -13,11 +13,12 @@ class MoveRulesTest {
     @Test
     void captureProtectionDependsOnSquareTypeNotItsAssociatedColor() {
         Set<SquareType> protectedTypes = Set.of(
-                SquareType.PROTECTED, SquareType.START, SquareType.FINISHING);
+                SquareType.PROTECTED, SquareType.START, SquareType.FINISHING, SquareType.SURPRISE);
         for (SquareType type : SquareType.values()) {
             for (SquareColor color : SquareColor.values()) {
                 Square square = new Square(new Position(8, 3), type, color,
-                        type == SquareType.EMPTY ? SquareStatus.INACTIVE : SquareStatus.ACTIVE);
+                        type == SquareType.EMPTY ? SquareStatus.INACTIVE : SquareStatus.ACTIVE,
+                        type == SquareType.QUESTION ? QuestionDifficulty.EASY : null);
                 assertEquals(protectedTypes.contains(type), rules.isProtectedFromCapture(square),
                         type + " / " + color);
             }

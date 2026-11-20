@@ -9,6 +9,8 @@ public enum SquareType {
     START,
     ARROW,
     PROTECTED,
+    QUESTION,
+    SURPRISE,
     CASTLE,
     HOME_PATH,
     FINISHING

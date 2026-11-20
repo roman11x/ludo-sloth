@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 import Model.Board;
+import Model.Difficulty;
 import Model.Game;
 import Model.MoveCandidate;
 import Model.Piece;
@@ -59,7 +60,13 @@ public class GameController {
      * @throws IllegalArgumentException if the players are not a valid Easy setup
      */
     public GameController(BoardView boardView, List<String> names, List<String> colours) {
-        this(boardView, new Game(players(names, colours)));
+        this(boardView, names, colours, Difficulty.EASY);
+    }
+
+    /** Starts a game with an explicit difficulty; currently only Easy is supported. */
+    public GameController(BoardView boardView, List<String> names, List<String> colours,
+                          Difficulty difficulty) {
+        this(boardView, new Game(players(names, colours), difficulty));
     }
 
     /**

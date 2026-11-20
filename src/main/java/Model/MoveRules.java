@@ -11,8 +11,8 @@ public class MoveRules {
     public boolean isProtectedFromCapture(Square square) {
         Objects.requireNonNull(square, "square");
         return switch (square.type()) {
-            case PROTECTED, START, FINISHING -> true;
-            case EMPTY, NORMAL, ARROW, CASTLE, HOME_PATH -> false;
+            case PROTECTED, START, FINISHING, SURPRISE -> true;
+            case EMPTY, NORMAL, ARROW, CASTLE, HOME_PATH, QUESTION -> false;
         };
     }
 
@@ -111,7 +111,7 @@ public class MoveRules {
         return switch (square.type()) {
             case EMPTY, CASTLE -> false;
             case HOME_PATH, FINISHING -> square.associatedColor() == SquareColor.fromPlayerColor(color);
-            case NORMAL, START, ARROW, PROTECTED -> true;
+            case NORMAL, START, ARROW, PROTECTED, QUESTION, SURPRISE -> true;
         };
     }
 

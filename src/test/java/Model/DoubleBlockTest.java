@@ -143,9 +143,15 @@ class DoubleBlockTest {
     }
 
     @Test
-    void blocksAreBasedOnPieceOwnerForEveryActiveSquareTypeAndColor() {
-        for (SquareType type : SquareType.values()) {
-            if (type == SquareType.EMPTY) continue;
+    void blocksAreBasedOnPieceOwnerForEveryActiveEasySquareTypeAndColor() {
+        var activeTypes = java.util.EnumSet.noneOf(SquareType.class);
+        for (int row = 0; row < Board.STORAGE_SIZE; row++) {
+            for (int column = 0; column < Board.STORAGE_SIZE; column++) {
+                Square square = board.squareAt(new Position(row, column));
+                if (square.status() == SquareStatus.ACTIVE) activeTypes.add(square.type());
+            }
+        }
+        for (SquareType type : activeTypes) {
             Square square = null;
             for (int row = 0; row < Board.STORAGE_SIZE; row++) {
                 for (int column = 0; column < Board.STORAGE_SIZE; column++) {

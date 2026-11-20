@@ -40,13 +40,14 @@ public class SetupController {
 
     private void startGame() {
         if (gameStarted) return;
-        Validation input = validateSetup(view.getPlayerNames(), view.getPlayerColours());
+        Difficulty difficulty = view.getDifficulty();
+        Validation input = parseAndValidateSetup(view.getPlayerNames(), view.getPlayerColours(), difficulty);
         if (!input.errors().isEmpty()) {
             view.showValidationMessages(input.errors());
             return;
         }
         view.clearValidationMessages();
-        Game game = new Game(input.players().stream().map(Player::new).toList());
+        Game game = new Game(input.players().stream().map(Player::new).toList(), difficulty);
         BoardView board = new BoardView();
         GameController controller = new GameController(board, game);
         Runnable mainMenu = () -> {
@@ -64,15 +65,16 @@ public class SetupController {
         showScreen.accept(board.getRoot());
     }
 
-    /** Validate raw form values without creating JavaFX controls or changing the input. */
-    static Validation validateSetup(List<String> names, List<String> colours) {
+    /** Parse raw form values and delegate setup rules to SetupValidator without changing the input. */
+    static Validation parseAndValidateSetup(List<String> names, List<String> colours) {
+        return parseAndValidateSetup(names, colours, Difficulty.EASY);
+    }
+
+    static Validation parseAndValidateSetup(List<String> names, List<String> colours, Difficulty difficulty) {
         Objects.requireNonNull(names, "names");
         Objects.requireNonNull(colours, "colours");
         if (names.size() != colours.size()) {
             return new Validation(List.of(), List.of("Each player needs exactly one color"));
-        }
-        if (names.size() < 2 || names.size() > 4) {
-            return new Validation(List.of(), List.of("Please add between 2 and 4 players"));
         }
         List<PlayerSetup> players = new ArrayList<>();
         List<String> errors = new ArrayList<>();
@@ -91,7 +93,7 @@ public class SetupController {
                 errors.add("Player " + (i + 1) + ": " + invalidInput.getMessage());
             }
         }
-        if (errors.isEmpty()) errors.addAll(SetupValidator.validate(players, Difficulty.EASY));
+        if (errors.isEmpty()) errors.addAll(SetupValidator.validate(players, difficulty));
         return new Validation(errors.isEmpty() ? players : List.of(), errors);
     }
 

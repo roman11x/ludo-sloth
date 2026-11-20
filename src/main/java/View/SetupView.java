@@ -1,5 +1,7 @@
 package View;
 
+import Model.Difficulty;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,6 +37,7 @@ public class SetupView {
     private static final double SUMMARY_WIDTH = 220;
     private static final double PAGE_MAX_WIDTH = 960;
 
+    private final ToggleGroup difficultyGroup = new ToggleGroup();
     private final ScrollPane root;
     private final List<PlayerRow> rows = new ArrayList<>();
     private final VBox summaryLines = new VBox(8);
@@ -245,10 +248,17 @@ public class SetupView {
         return box;
     }
 
+    /** Selected game difficulty; currently the screen offers Easy only. */
+    public Difficulty getDifficulty() {
+        Toggle selected = difficultyGroup.getSelectedToggle();
+        return selected == null ? null : (Difficulty) selected.getUserData();
+    }
+
     private VBox buildDifficulty() {
         RadioButton easy = new RadioButton("Easy");
         easy.getStyleClass().add("ludo-radio");
-        easy.setToggleGroup(new ToggleGroup());
+        easy.setUserData(Difficulty.EASY);
+        easy.setToggleGroup(difficultyGroup);
         easy.setSelected(true);
         HBox row = new HBox(16, sectionLabel("Difficulty:"), easy);
         row.setAlignment(Pos.CENTER_LEFT);
