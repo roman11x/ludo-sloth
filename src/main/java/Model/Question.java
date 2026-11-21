@@ -34,14 +34,14 @@ public record Question(String text,
 
 
     /**
-     * Validates that the question text is not null or empty.
+     * Validates that the question text is not null or blank.
      *
      * @param text the question text to validate
-     * @throws IllegalArgumentException if the question text is null or empty
+     * @throws IllegalArgumentException if the question text is null or blank
      */
     private static void validateQuestionText(String text) {
         if (text == null || text.isBlank()) {
-            throw new IllegalArgumentException("Question text cannot be null or empty");
+            throw new IllegalArgumentException("Question text cannot be null or blank");
         }
     }
 
@@ -100,7 +100,7 @@ public record Question(String text,
     private static void validateCorrectIndex(int correctIndex) {
         if (correctIndex < MIN_INDEX || correctIndex >= ANSWER_COUNT) {
             throw new IllegalArgumentException("Correct index must be between "
-                    + MIN_INDEX + " and " + (ANSWER_COUNT - 1)
+                    + MIN_INDEX + "," + " and " + (ANSWER_COUNT - 1)
             + " but got " + correctIndex);
         }
     }
