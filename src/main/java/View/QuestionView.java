@@ -7,10 +7,12 @@ import java.util.function.IntConsumer;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.AccessibleRole;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
@@ -23,13 +25,15 @@ import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.stage.Window;
+import javafx.stage.WindowEvent;
 
 /**
  * The question dialog: the player who landed on a question square picks one of four answers
  * (mouse, or keys 1–4), then sees the feedback the caller gives and presses Continue.
  * <p>
  * It opens as a modal window over the game screen, so nothing on the game screen (Roll, Space,
- * pieces, Main Menu) can be used while it is open, and it cannot be closed without answering.
+ * pieces, Main Menu) can be used while it is open, and it cannot be dismissed back to the game
+ * without answering; closing it closes the game window, under that window's usual rules.
  * The dialog never decides whether an answer is right: it reports the chosen answer number and
  * shows whatever feedback it is given.
  */
@@ -38,8 +42,13 @@ public class QuestionView {
     private static final int ANSWER_COUNT = 4;
     private static final double WIDTH = 560;
     private static final double ANSWER_TEXT_WIDTH = 300;
+    // Width inside the dialog's frame and padding (see .question-dialog)
+    private static final double INNER_WIDTH = WIDTH - 2 * 24 - 2 * 4;
+    private static final double MIN_SCROLL_HEIGHT = 120;
+    private static final double SCREEN_MARGIN = 12;
 
     private final VBox content = new VBox(12);
+    private final ScrollPane scroll = new ScrollPane();
     private final Label playerLine = new Label();
     private final Label levelTag = new Label();
     private final Label questionText = new Label();
@@ -94,7 +103,18 @@ public class QuestionView {
         feedbackBox.getStyleClass().add("question-feedback");
         feedbackBox.managedProperty().bind(feedbackBox.visibleProperty());
 
-        content.getChildren().addAll(header, questionText, hint, answers, feedbackBox);
+        // Question and answers scroll when they do not fit the screen; the feedback and Continue
+        // stay below them, always visible
+        VBox questionPart = new VBox(12, header, questionText, hint, answers);
+        scroll.setContent(questionPart);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setMinHeight(MIN_SCROLL_HEIGHT);
+        scroll.getStyleClass().add("question-scroll");
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+
+        content.getChildren().addAll(scroll, feedbackBox);
         content.getStyleClass().add("question-dialog");
         content.setMinWidth(WIDTH);
         content.setPrefWidth(WIDTH);
@@ -157,19 +177,26 @@ public class QuestionView {
             answerMarks.get(i).setVisible(false);
         }
         feedbackBox.setVisible(false);
+        scroll.setVvalue(0);
         content.setAccessibleText(playerName + ", " + level + " question: " + question);
 
         stage = new Stage(StageStyle.UNDECORATED);
         stage.initOwner(owner);
         stage.initModality(Modality.WINDOW_MODAL);
         stage.setTitle(level + " question");
-        // Closing is refused until the player has answered and pressed Continue
-        stage.setOnCloseRequest(event -> event.consume());
+        // The dialog itself is never dismissed without answering. Closing it (Alt+F4) means
+        // quitting the game, so the request goes to the game window and follows its rules;
+        // the game window's own close button is disabled while this modal dialog is open.
+        stage.setOnCloseRequest(event -> {
+            event.consume();
+            owner.fireEvent(new WindowEvent(owner, WindowEvent.WINDOW_CLOSE_REQUEST));
+        });
         Scene scene = new Scene(content);
         scene.getStylesheets().addAll(owner.getScene().getStylesheets());
         scene.addEventFilter(KeyEvent.ANY, this::onKey);
         stage.setScene(scene);
-        stage.setOnShown(event -> placeOver(owner));
+        fitQuestionPart();
+        stage.setOnShown(event -> resize());
         stage.show();
     }
 
@@ -283,6 +310,19 @@ public class QuestionView {
                 event.consume();
                 return;
             }
+            double viewport = scroll.getViewportBounds().getHeight();
+            double step = switch (code) {
+                case UP -> -40;
+                case DOWN -> 40;
+                case PAGE_UP -> -viewport;
+                case PAGE_DOWN -> viewport;
+                default -> 0;
+            };
+            if (step != 0) {
+                scrollBy(step);
+                event.consume();
+                return;
+            }
         }
         if (code == KeyCode.ESCAPE) {
             // There is nothing to cancel: the question must be answered
@@ -290,6 +330,13 @@ public class QuestionView {
         } else if (!feedbackShown && (code == KeyCode.SPACE || code == KeyCode.ENTER)) {
             // A Space press meant for Roll must not act here; until the feedback, only 1–4 answer
             event.consume();
+        }
+    }
+
+    private void scrollBy(double pixels) {
+        double hidden = scroll.getContent().getLayoutBounds().getHeight() - scroll.getViewportBounds().getHeight();
+        if (hidden > 0) {
+            scroll.setVvalue(Math.max(0, Math.min(1, scroll.getVvalue() + pixels / hidden)));
         }
     }
 
@@ -325,15 +372,35 @@ public class QuestionView {
         }
     }
 
+    /**
+     * Asks for the question part's full height at the width it really gets; the window may then
+     * give it less, and it scrolls.
+     */
+    private void fitQuestionPart() {
+        Node questionPart = scroll.getContent();
+        scroll.setPrefViewportHeight(questionPart.prefHeight(INNER_WIDTH));
+    }
+
+    /** Fits the content, but never taller than the screen, so Continue is always on screen. */
     private void resize() {
+        fitQuestionPart();
         stage.sizeToScene();
-        placeOver(stage.getOwner());
+        Window owner = stage.getOwner();
+        Rectangle2D area = screenArea(owner);
+        double maxHeight = area.getHeight() - 2 * SCREEN_MARGIN;
+        if (stage.getHeight() > maxHeight) {
+            stage.setHeight(maxHeight);
+        }
+        placeOver(owner, area);
+    }
+
+    private static Rectangle2D screenArea(Window owner) {
+        return Screen.getScreensForRectangle(owner.getX(), owner.getY(), owner.getWidth(), owner.getHeight())
+                .stream().findFirst().orElse(Screen.getPrimary()).getVisualBounds();
     }
 
     /** Centred over the game window, and kept inside the screen that window is on. */
-    private void placeOver(Window owner) {
-        Rectangle2D area = Screen.getScreensForRectangle(owner.getX(), owner.getY(), owner.getWidth(), owner.getHeight())
-                .stream().findFirst().orElse(Screen.getPrimary()).getVisualBounds();
+    private void placeOver(Window owner, Rectangle2D area) {
         double x = owner.getX() + (owner.getWidth() - stage.getWidth()) / 2;
         double y = owner.getY() + (owner.getHeight() - stage.getHeight()) / 2;
         stage.setX(Math.max(area.getMinX(), Math.min(x, area.getMaxX() - stage.getWidth())));

@@ -293,7 +293,7 @@
     -fx-text-fill: #1a1a1a;
 }
 
-.dice-move-reason {
+.dice-move-note {
     -fx-font-size: 13px;
     -fx-text-fill: #1a1a1a;
 }
@@ -308,6 +308,18 @@
     -fx-padding: 20 24 20 24;
     -fx-focus-color: #1a1a1a;
     -fx-faint-focus-color: transparent;
+}
+
+/* Question and answers scroll inside the frame, on white, without a frame of their own. */
+.question-scroll,
+.question-scroll > .viewport {
+    -fx-background-color: white;
+    -fx-background: white;
+}
+
+.question-scroll {
+    -fx-background-insets: 0;
+    -fx-padding: 0;
 }
 
 .question-player {

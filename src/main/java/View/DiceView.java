@@ -49,7 +49,7 @@ public class DiceView {
     private final Label specialLabel;
     private final StackPane specialBox;
     private final Label moveLabel;
-    private final Label reasonLabel;
+    private final Label noteLabel;
     private final Random animationFaces = new Random();
     private Timeline rolling; // the running animation, or null when the die is not rolling
     private boolean spaceHeld;
@@ -99,22 +99,22 @@ public class DiceView {
         HBox diceRow = new HBox(16, standardColumn, specialColumn);
         diceRow.setAlignment(Pos.TOP_CENTER);
 
-        // The move a Medium roll gives, and why it is 0 when the Boost die shows 1
+        // The shared-path move a Medium roll gives, and what the Standard die alone still counts for
         moveLabel = new Label();
         moveLabel.getStyleClass().add("dice-move");
         moveLabel.setWrapText(true);
         hideable(moveLabel);
-        reasonLabel = new Label();
-        reasonLabel.getStyleClass().add("dice-move-reason");
-        reasonLabel.setWrapText(true);
-        hideable(reasonLabel);
+        noteLabel = new Label();
+        noteLabel.getStyleClass().add("dice-move-note");
+        noteLabel.setWrapText(true);
+        hideable(noteLabel);
 
         // Primary action of the turn, same look as the other primary buttons
         rollButton = new Button("Roll (Space)");
         rollButton.getStyleClass().addAll("ludo-button", "ludo-button-primary", "ludo-button-compact");
         installSpaceShortcut();
 
-        root = new VBox(10, heading, available, surpriseTag, resultCaption, diceRow, moveLabel, reasonLabel, rollButton);
+        root = new VBox(10, heading, available, surpriseTag, resultCaption, diceRow, moveLabel, noteLabel, rollButton);
         root.setAlignment(Pos.TOP_CENTER);
         root.getStyleClass().add("ludo-panel");
         applyMode(Mode.EASY);
@@ -193,8 +193,9 @@ public class DiceView {
     /**
      * Shows the result of the latest Medium roll, both dice rolling together and landing about
      * 0.7 seconds after the call: the Standard die, the Boost die (or UltraBoost die during a
-     * surprise turn) and the move, e.g. "6 × (3 − 1) = 12 steps". A move of 0 is shown with its
-     * reason.
+     * surprise turn) and the shared-path move, e.g. "Shared path: 6 × (3 − 1) = 12 steps", plus a
+     * note that leaving the Castle and the Home Path use the Standard die only. A shared-path move
+     * of 0 is shown as 0 steps.
      *
      * @param standard the Standard die, 1–6
      * @param special  the Boost die (1–3), or the UltraBoost die (1–6) during a surprise turn
@@ -371,20 +372,20 @@ public class DiceView {
         rolling = null;
     }
 
+    /** The multiplied move applies to the shared path only; the Standard die alone still counts elsewhere. */
     private void showMove(int standard, int special, int steps) {
-        moveLabel.setText(standard + " × (" + special + " − 1) = " + steps + (steps == 1 ? " step" : " steps"));
+        moveLabel.setText("Shared path: " + standard + " × (" + special + " − 1) = " + steps
+                + (steps == 1 ? " step" : " steps"));
         moveLabel.setVisible(true);
-        if (steps == 0) {
-            reasonLabel.setText(specialName() + " rolled 1, so this roll gives no move.");
-            reasonLabel.setVisible(true);
-        }
+        noteLabel.setText("Leaving the Castle and the Home Path use the Standard die only: " + standard + ".");
+        noteLabel.setVisible(true);
     }
 
     private void clearMove() {
         moveLabel.setText("");
         moveLabel.setVisible(false);
-        reasonLabel.setText("");
-        reasonLabel.setVisible(false);
+        noteLabel.setText("");
+        noteLabel.setVisible(false);
     }
 
     /** Hidden nodes take no space, so Easy mode lays out exactly as a single-die area. */

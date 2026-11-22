@@ -123,19 +123,21 @@ public class LudoApp extends Application {
      */
     private static Parent devDicePreview() {
         DiceView dice = new DiceView();
-        Label caption = new Label("Press Roll for case 1 of 5: Easy, 4.");
+        Label caption = new Label("Press Roll for case 1 of 6: Easy, 4.");
         caption.getStyleClass().add("ludo-message");
         caption.setWrapText(true);
         List<String> captions = List.of(
-                "Case 1 of 5: Easy, 4.",
-                "Case 2 of 5: Medium, 6 and 3, 12 steps.",
-                "Case 3 of 5: Medium, 5 and 1, 0 steps.",
-                "Case 4 of 5: UltraBoost surprise turn, 4 and 6, 20 steps.",
-                "Case 5 of 5: Medium again, 2 and 2, 2 steps. End of preview.");
+                "Case 1 of 6: Easy, 4.",
+                "Case 2 of 6: Medium, 6 and 3, 12 steps on the shared path.",
+                "Case 3 of 6: Medium, 5 and 1, 0 steps on the shared path.",
+                "Case 4 of 6: Medium, 6 and 1, 0 steps on the shared path; the 6 still counts for leaving the Castle.",
+                "Case 5 of 6: UltraBoost surprise turn, 4 and 6, 20 steps on the shared path.",
+                "Case 6 of 6: Medium again, 2 and 2, 2 steps on the shared path. End of preview.");
         List<Runnable> cases = List.of(
                 () -> dice.showResult(4),
                 () -> { dice.setMediumMode(); dice.showMediumResult(6, 3, 12); },
                 () -> dice.showMediumResult(5, 1, 0),
+                () -> dice.showMediumResult(6, 1, 0),
                 () -> { dice.setUltraBoostTurn(); dice.showMediumResult(4, 6, 20); },
                 () -> { dice.setMediumMode(); dice.showMediumResult(2, 2, 2, () -> dice.setRollEnabled(false)); });
         int[] next = {0};
@@ -153,7 +155,8 @@ public class LudoApp extends Application {
     }
 
     /**
-     * Development only: a Medium sample question, then a Hard one after Continue. The preview,
+     * Development only: a Medium sample question, then a Hard one, then a very long Easy one, each
+     * after Continue. The preview,
      * not the dialog, decides right and wrong; Roll is unavailable while a question is open.
      */
     private static void devQuestionPreview(BoardView board) {
@@ -164,7 +167,26 @@ public class LudoApp extends Application {
                         List.of("Singleton", "Factory Method", "Observer", "Adapter"), 3, 2),
                 new Sample("Daniel", "Hard",
                         "Which UML diagram shows the order of messages between objects over time?",
-                        List.of("Class diagram", "Sequence diagram", "Use case diagram", "Component diagram"), 2, 3));
+                        List.of("Class diagram", "Sequence diagram", "Use case diagram", "Component diagram"), 2, 3),
+                new Sample("Noa", "Easy",
+                        "A team is building a desktop board game with a strict Model-View-Controller split. The "
+                                + "game rules, the board and the dice live in the Model; the screens live in the View; "
+                                + "and the Controller connects them. During a review, a teammate notices that one of "
+                                + "the screens has started reading the board directly so that it can redraw the pieces "
+                                + "faster, and another screen now decides on its own whether a move is legal before "
+                                + "asking anyone. The team agrees that both shortcuts break the design they documented, "
+                                + "even though the game still plays correctly today. Which change brings both screens "
+                                + "back in line with the documented design while keeping the behaviour the players see "
+                                + "exactly the same as it is now?",
+                        List.of("Let the Model notify the Controller of every change, and have the Controller tell "
+                                        + "each screen what to draw and which moves it may offer, using plain values only.",
+                                "Copy the move rules into every screen that needs them, so that each screen can check "
+                                        + "a move by itself without waiting for the Controller or the Model to answer.",
+                                "Give every screen a direct reference to the Model, but promise in a code comment that "
+                                        + "the screens will only ever read from it and never change anything there.",
+                                "Merge the Controller into the Model, so that there is one place less to update and "
+                                        + "the screens can talk to the rules and the board through a single class."),
+                        1, 1));
         DiceView dice = board.getDiceView();
         QuestionView dialog = new QuestionView();
         int[] current = {0};
@@ -177,7 +199,8 @@ public class LudoApp extends Application {
             Sample sample = samples.get(current[0]);
             boolean correct = number == sample.correct();
             dialog.showFeedback(correct, sample.correct(),
-                    (correct ? "Move forward " : "Move back ") + sample.squares() + " squares");
+                    (correct ? "Move forward " : "Move back ") + sample.squares()
+                            + (sample.squares() == 1 ? " square" : " squares"));
         });
         dialog.setOnContinue(() -> {
             dice.setEffectResolving(false);
