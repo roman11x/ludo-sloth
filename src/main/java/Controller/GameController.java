@@ -11,6 +11,7 @@ import java.util.function.Consumer;
 import Model.Board;
 import Model.Difficulty;
 import Model.Game;
+import Model.GameListener;
 import Model.MoveCandidate;
 import Model.Piece;
 import Model.Player;
@@ -31,9 +32,10 @@ import javafx.util.Duration;
  * Handles rolling, piece selection and board updates during play.
  * <p>
  * Plays one Easy game on a board screen. The game is changed only through {@link Game#roll()}
- * and {@link Game#play(Piece)}; everything else is read to update the screen.
+ * and {@link Game#play(Piece)}; the screen is updated from the game's {@link GameListener}
+ * notifications.
  */
-public class GameController {
+public class GameController implements GameListener {
 
     // The Model's square storage grid holds the board grid in its middle
     private static final int GRID_OFFSET = (Board.STORAGE_SIZE - BoardView.GRID_SIZE) / 2;
@@ -49,9 +51,15 @@ public class GameController {
     private boolean gameOverReported;
     private boolean stopped;
     private Player choosingPlayer;
-    private TurnRoll choosingRoll;
     private List<MoveCandidate> choosingMoves = List.of();
-    private String choosingText = "";
+    // The turn being shown: who rolled what, and the message built from its notifications
+    private Player roller;
+    private TurnRoll roll;
+    private List<MoveCandidate> rolledMoves = List.of();
+    private final StringBuilder turnText = new StringBuilder();
+    // Set while the die animates: the turn already passed to this player
+    private Player nextAfterRoll;
+    private boolean diceRolling;
 
     /**
      * Starts a new Easy game on the board screen: {@code names.get(i)} plays
@@ -99,6 +107,7 @@ public class GameController {
             boardView.showMessage(currentPlayer().name() + ", roll the die to start your turn.");
             diceView.setRollEnabled(true);
             clock.play();
+            game.addListener(this);
         }
     }
 
@@ -108,6 +117,7 @@ public class GameController {
     public void stop() {
         if (stopped) return;
         stopped = true;
+        game.removeListener(this);
         clock.stop();
         resultsDelay.stop();
         diceView.stopAnimation();
@@ -117,9 +127,7 @@ public class GameController {
         boardView.setOnPieceChosen(null);
         boardView.setOnMainMenu(null);
         choosingPlayer = null;
-        choosingRoll = null;
         choosingMoves = List.of();
-        choosingText = "";
     }
 
     /** Leaving a running game abandons it; only completed games reach ResultsController. */
@@ -168,39 +176,49 @@ public class GameController {
     }
 
     /**
-     * One press of Roll: the game rolls for the active player; the outcome is shown once the
-     * dice area has finished its animation.
+     * One press of Roll: the game rolls for the active player. Its notifications start the dice
+     * animation; the outcome is shown once the animation has finished.
      */
     private void roll() {
         if (stopped || game.isFinished() || game.turnManager().phase() != TurnPhase.WAITING_FOR_ROLL) {
             return;
         }
         boardView.setMainMenuEnabled(false);
-        Player roller = currentPlayer();
-        TurnRoll roll = game.roll();
-        List<MoveCandidate> moves = game.legalMoves();
-        diceView.showResult(roll.value(), () -> afterRoll(roller, roll, moves));
+        game.roll();
     }
 
-    private void afterRoll(Player roller, TurnRoll roll, List<MoveCandidate> moves) {
+    @Override
+    public void rolled(Player player, TurnRoll roll) {
+        if (stopped) return;
+        roller = player;
+        this.roll = roll;
+        rolledMoves = game.legalMoves();
+        nextAfterRoll = null;
+        turnText.setLength(0);
+        turnText.append(player.name()).append(" rolled ").append(roll.value()).append('.');
+        diceRolling = true;
+        diceView.showResult(roll.value(), this::afterRoll);
+    }
+
+    private void afterRoll() {
+        diceRolling = false;
         if (stopped) return;
         boardView.setMainMenuEnabled(!game.isFinished());
-        String rolled = roller.name() + " rolled " + roll.value() + ".";
         if (roll.cancelled()) {
-            endTurn(rolled + " That is a third 6 in a row, so it is cancelled.", roller, roll);
-        } else if (moves.isEmpty()) {
-            endTurn(rolled + " No piece can move.", roller, roll);
-        } else if (moves.size() == 1) {
-            play(roller, roll, moves.getFirst().piece(), rolled);
+            turnText.append(" That is a third 6 in a row, so it is cancelled.");
+            showNextTurn(nextAfterRoll);
+        } else if (rolledMoves.isEmpty()) {
+            turnText.append(" No piece can move.");
+            showNextTurn(nextAfterRoll);
+        } else if (rolledMoves.size() == 1) {
+            game.play(rolledMoves.getFirst().piece());
         } else {
             choosingPlayer = roller;
-            choosingRoll = roll;
-            choosingMoves = moves;
-            choosingText = rolled;
-            List<Integer> numbers = moves.stream().map(move -> move.piece().number()).toList();
+            choosingMoves = rolledMoves;
+            List<Integer> numbers = rolledMoves.stream().map(move -> move.piece().number()).toList();
             diceView.setRollEnabled(false);
             boardView.setSelectablePieces(colourName(roller.color()), numbers);
-            boardView.showMessage(rolled + " Choose a piece to move: " + joinNumbers(numbers) + ".");
+            boardView.showMessage(turnText + " Choose a piece to move: " + joinNumbers(numbers) + ".");
         }
     }
 
@@ -214,60 +232,61 @@ public class GameController {
         if (chosen == null) {
             return;
         }
-        Player roller = choosingPlayer;
-        TurnRoll roll = choosingRoll;
-        String rolled = choosingText;
         choosingPlayer = null;
-        choosingRoll = null;
         choosingMoves = List.of();
-        choosingText = "";
-        play(roller, roll, chosen.piece(), rolled);
+        game.play(chosen.piece());
     }
 
-    private void play(Player roller, TurnRoll roll, Piece piece, String rolled) {
-        Map<Piece, Position> before = piecePositions();
-        boolean finishedBefore = game.hasFinished(roller);
-        game.play(piece);
-        Map<Piece, Position> after = piecePositions();
+    @Override
+    public void pieceMoved(Player player, MoveCandidate move) {
+        if (stopped) return;
         boardView.clearSelectablePieces();
-        showPieces();
+        showPiece(move.piece(), move.destination());
+        turnText.append(' ').append(player.name()).append(" moved piece ").append(move.piece().number()).append('.');
+    }
 
-        StringBuilder text = new StringBuilder(rolled)
-                .append(' ').append(roller.name()).append(" moved piece ").append(piece.number()).append('.');
-        for (Player other : game.players()) {
-            if (other == roller) {
-                continue;
-            }
-            for (Piece otherPiece : other.pieces()) {
-                if (!Objects.equals(before.get(otherPiece), after.get(otherPiece))) {
-                    text.append(" It captured ").append(other.name()).append("'s piece ")
-                            .append(otherPiece.number()).append(", which goes back to the Castle.");
-                }
-            }
+    @Override
+    public void pieceCaptured(Player owner, Piece piece, Position castleSlot) {
+        if (stopped) return;
+        showPiece(piece, castleSlot);
+        turnText.append(" It captured ").append(owner.name()).append("'s piece ")
+                .append(piece.number()).append(", which goes back to the Castle.");
+    }
+
+    @Override
+    public void playerFinished(Player player, int place) {
+        if (stopped) return;
+        turnText.append(' ').append(player.name()).append(" has all four pieces home: ")
+                .append(PLACES[place - 1]).append(" place!");
+    }
+
+    @Override
+    public void turnPassed(Player next) {
+        if (stopped) return;
+        if (diceRolling) {
+            // Shown once the die animation has finished
+            nextAfterRoll = next;
+        } else {
+            showNextTurn(next);
         }
-        if (!finishedBefore && game.hasFinished(roller)) {
-            int place = game.ranking().indexOf(roller);
-            text.append(' ').append(roller.name()).append(" has all four pieces home: ")
-                    .append(PLACES[place]).append(" place!");
-        }
-        if (game.isFinished()) {
-            showGameOver(text.toString());
-            return;
-        }
-        endTurn(text.toString(), roller, roll);
+    }
+
+    @Override
+    public void gameOver(List<Player> ranking) {
+        if (stopped) return;
+        showGameOver(turnText.toString());
     }
 
     /**
      * After the game has resolved the turn: say who plays next (the same player after a 6),
      * update the turn display and make Roll available again.
      */
-    private void endTurn(String text, Player roller, TurnRoll roll) {
-        Player next = currentPlayer();
+    private void showNextTurn(Player next) {
         String nextText = next == roller && roll.value() == 6
                 ? " Rolled a 6: " + roller.name() + " rolls again."
                 : " Now it's " + next.name() + "'s turn.";
-        showTurn();
-        boardView.showMessage(text + nextText);
+        boardView.showTurn(next.name(), colourName(next.color()));
+        boardView.showMessage(turnText + nextText);
         diceView.setRollEnabled(true);
     }
 
@@ -302,11 +321,14 @@ public class GameController {
         Map<Piece, Position> positions = piecePositions();
         for (Player player : game.players()) {
             for (Piece piece : player.pieces()) {
-                Position position = positions.get(piece);
-                boardView.showPiece(colourName(piece.color()), piece.number(),
-                        position.row() - GRID_OFFSET, position.column() - GRID_OFFSET);
+                showPiece(piece, positions.get(piece));
             }
         }
+    }
+
+    private void showPiece(Piece piece, Position position) {
+        boardView.showPiece(colourName(piece.color()), piece.number(),
+                position.row() - GRID_OFFSET, position.column() - GRID_OFFSET);
     }
 
     private Map<Piece, Position> piecePositions() {
