@@ -2,10 +2,12 @@ package View;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.ObjIntConsumer;
 
 import javafx.geometry.Pos;
@@ -16,6 +18,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
@@ -39,27 +42,36 @@ import javafx.stage.WindowEvent;
  * while it is open, and it cannot be dismissed back to the game without finishing; closing it
  * closes the game window, under that window's usual rules. Every event ends with Continue, which
  * closes the screen and then tells the caller. The screen decides nothing: the caller passes the
- * names, colours, eligible opponents and pieces, the roll and the resulting move as plain values.
+ * names, colours, eligible opponents and pieces, the roll and the actual distances as plain values.
+ * The screen is never taller than the screen it is on: its body scrolls, and the outcome line and
+ * Continue stay visible below it.
  * <p>
  * Colours are the words "Red", "Green", "Yellow" or "Blue" (any case) and are always shown as a
  * word next to their circle. Choices can also be made by key: an opponent with the number shown
- * in front of it, a piece with its own piece number.
+ * in front of it, a piece with its own piece number. Holding a key makes one choice; it counts
+ * again only after it is released.
  */
 public class SurpriseView {
 
     private static final double WIDTH = 520;
+    // Width inside the screen's frame and padding (see .surprise-dialog)
+    private static final double INNER_WIDTH = WIDTH - 2 * 24 - 2 * 4;
+    private static final double MIN_SCROLL_HEIGHT = 120;
     private static final double SCREEN_MARGIN = 12;
     private static final Set<String> COLOURS = Set.of("red", "green", "yellow", "blue");
     private static final int MAX_OPPONENTS = 3;
     private static final int MAX_PIECE = 4;
+    private static final int BACK_THREE = 3;
 
     private final VBox content = new VBox(14);
+    private final ScrollPane scroll = new ScrollPane();
     private final Label playerLine = new Label();
     private final Label title = new Label();
     private final VBox body = new VBox(10);
     private final Label status = new Label();
     private final Button continueButton = new Button("Continue");
     private final Map<Integer, Button> numberedOptions = new HashMap<>(); // number key -> choice
+    private final Set<KeyCode> heldKeys = new HashSet<>();
     private Stage stage;
     private Runnable continueAction;
 
@@ -74,11 +86,23 @@ public class SurpriseView {
 
         title.getStyleClass().add("surprise-title");
         title.setWrapText(true);
+
+        // Event, choices and roll scroll when they do not fit the screen
+        VBox scrolled = new VBox(14, header, title, body);
+        scroll.setContent(scrolled);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setMinHeight(MIN_SCROLL_HEIGHT);
+        // Plain white, without a frame of its own (the Setup screen's scroll style)
+        scroll.getStyleClass().add("ludo-setup-scroll");
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+
+        // The outcome and Continue stay below the scrolled part, always visible
         status.getStyleClass().add("surprise-status");
         status.setWrapText(true);
         status.setMaxWidth(Double.MAX_VALUE);
         status.managedProperty().bind(status.visibleProperty());
-
         continueButton.getStyleClass().addAll("ludo-button", "ludo-button-primary", "ludo-button-compact");
         continueButton.setDefaultButton(true);
         continueButton.managedProperty().bind(continueButton.visibleProperty());
@@ -86,7 +110,7 @@ public class SurpriseView {
         HBox continueRow = new HBox(continueButton);
         continueRow.setAlignment(Pos.CENTER_RIGHT);
 
-        content.getChildren().addAll(header, title, body, status, continueRow);
+        content.getChildren().addAll(scroll, status, continueRow);
         content.getStyleClass().add("surprise-dialog");
         content.setMinWidth(WIDTH);
         content.setPrefWidth(WIDTH);
@@ -118,15 +142,29 @@ public class SurpriseView {
     }
 
     /**
-     * Event 4, Back 3 squares: names the piece that moves back three squares.
+     * Event 4, Back 3 squares: names the piece and how far it really moves back. A backward move
+     * stops at the piece's own Start Square, so this can be fewer than 3.
      *
-     * @param onContinue called after Continue has closed the screen
+     * @param squaresBack the squares the piece actually moves back, as the game decided it: 0–3
+     * @param onContinue  called after Continue has closed the screen
+     * @throws IllegalArgumentException if {@code squaresBack} is not 0–3, or another value is invalid
      */
     public void showBackThreeSquares(Parent gameScreen, String playerName, String pieceColour, int pieceNumber,
-                                     Runnable onContinue) {
+                                     int squaresBack, Runnable onContinue) {
         String piece = pieceName(pieceColour, pieceNumber);
-        announce(gameScreen, playerName, "Back 3 squares",
-                pieceLine(pieceColour, playerName + "'s " + piece + " moves back 3 squares."), onContinue);
+        if (squaresBack < 0 || squaresBack > BACK_THREE) {
+            throw new IllegalArgumentException("Squares back must be 0–" + BACK_THREE);
+        }
+        String sentence;
+        if (squaresBack == BACK_THREE) {
+            sentence = playerName + "'s " + piece + " moves back 3 squares.";
+        } else if (squaresBack == 0) {
+            sentence = playerName + "'s " + piece + " is on its own Start Square, so it does not move back.";
+        } else {
+            sentence = playerName + "'s " + piece + " moves back " + squares(squaresBack)
+                    + ": a piece never moves back past its own Start Square.";
+        }
+        announce(gameScreen, playerName, "Back 3 squares", pieceLine(pieceColour, sentence), onContinue);
     }
 
     /**
@@ -156,27 +194,31 @@ public class SurpriseView {
     }
 
     /**
-     * Event 2, Opponent moves back. The player picks an opponent, then sees the Standard die roll,
-     * then picks one of that opponent's eligible pieces, which moves back {@code stepsBack} squares.
-     * Opponents not marked eligible cannot be picked. If the picked opponent has no eligible piece,
-     * the player may pick another opponent; the roll stays the same. If no opponent is eligible, or
-     * every eligible opponent turns out to have no eligible piece, the event is cancelled.
+     * Event 2, Opponent moves back. The player picks an eligible opponent, then sees the Standard
+     * die roll, then picks one of that opponent's eligible pieces, which moves back the distance
+     * the caller gives for it. If no opponent is eligible, the screen says the event is cancelled.
+     * <p>
+     * A piece is eligible when it can move back at least one square. An opponent is eligible
+     * exactly when it has at least one eligible piece; input where {@code opponentEligible} and
+     * {@code eligiblePieces} disagree is rejected. Opponents that are not eligible are shown with
+     * "no piece can move back" and cannot be picked.
      *
-     * @param opponentNames     the opponents, in the order shown
-     * @param opponentColours   each opponent's colour word, same order
-     * @param opponentEligible  whether each opponent may be picked, same order
-     * @param eligiblePieces    for each opponent, the numbers (1–4) of the pieces that may move back
-     *                          with this roll; may be empty
-     * @param roll              the Standard die roll, 1–6
-     * @param stepsBack         how far the picked piece moves back, as the game decided it
-     * @param onPieceChosen     after Continue: the picked opponent's name and piece number
-     * @param onCancelled       after Continue, if the event was cancelled
+     * @param opponentNames    the opponents, in the order shown
+     * @param opponentColours  each opponent's colour word, same order
+     * @param opponentEligible whether each opponent is eligible, same order
+     * @param eligiblePieces   for each opponent, its eligible pieces: piece number (1–4) to the
+     *                         squares that piece actually moves back (at least 1), as the game
+     *                         decided it; empty for an opponent that is not eligible
+     * @param roll             the Standard die roll, 1–6
+     * @param onPieceChosen    after Continue: the picked opponent's name and piece number
+     * @param onCancelled      after Continue, if the event was cancelled
      * @throws IllegalArgumentException if the lists differ in size, there are not 1–3 opponents,
-     *                                  or a value is missing or out of range
+     *                                  eligibility and eligible pieces disagree, or a value is
+     *                                  missing or out of range
      */
     public void showOpponentMovesBack(Parent gameScreen, String playerName, List<String> opponentNames,
                                       List<String> opponentColours, List<Boolean> opponentEligible,
-                                      List<List<Integer>> eligiblePieces, int roll, int stepsBack,
+                                      List<Map<Integer, Integer>> eligiblePieces, int roll,
                                       ObjIntConsumer<String> onPieceChosen, Runnable onCancelled) {
         requireText(playerName, "player name");
         int count = opponentNames == null ? 0 : opponentNames.size();
@@ -184,30 +226,38 @@ public class SurpriseView {
                 || opponentEligible == null || opponentEligible.size() != count
                 || eligiblePieces == null || eligiblePieces.size() != count) {
             throw new IllegalArgumentException("Need 1–" + MAX_OPPONENTS + " opponents, each with a colour, "
-                    + "an eligibility flag and a list of eligible pieces");
+                    + "an eligibility flag and its eligible pieces");
         }
+        List<Map<Integer, Integer>> pieces = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             requireText(opponentNames.get(i), "opponent name");
             requireColour(opponentColours.get(i));
-            if (opponentEligible.get(i) == null || eligiblePieces.get(i) == null) {
-                throw new IllegalArgumentException("Opponent " + (i + 1) + " needs an eligibility flag and a piece list");
+            Boolean eligible = opponentEligible.get(i);
+            Map<Integer, Integer> opponentPieces = eligiblePieces.get(i);
+            if (eligible == null || opponentPieces == null) {
+                throw new IllegalArgumentException("Opponent " + (i + 1) + " needs an eligibility flag and its pieces");
             }
-            for (Integer piece : eligiblePieces.get(i)) {
-                if (piece == null || piece < 1 || piece > MAX_PIECE) {
+            if (eligible == opponentPieces.isEmpty()) {
+                throw new IllegalArgumentException("Opponent " + (i + 1) + " is eligible exactly when it has at "
+                        + "least one eligible piece");
+            }
+            for (Map.Entry<Integer, Integer> piece : opponentPieces.entrySet()) {
+                if (piece.getKey() == null || piece.getKey() < 1 || piece.getKey() > MAX_PIECE) {
                     throw new IllegalArgumentException("Piece numbers must be 1–" + MAX_PIECE);
                 }
+                if (piece.getValue() == null || piece.getValue() < 1) {
+                    throw new IllegalArgumentException("An eligible piece moves back at least one square");
+                }
             }
+            // Pieces are listed by number
+            pieces.add(new TreeMap<>(opponentPieces));
         }
         if (roll < 1 || roll > 6) {
             throw new IllegalArgumentException("The Standard die roll must be 1–6");
         }
-        if (stepsBack < 0) {
-            throw new IllegalArgumentException("Steps back must not be negative");
-        }
 
         new OpponentChoice(playerName, List.copyOf(opponentNames), List.copyOf(opponentColours),
-                List.copyOf(opponentEligible), eligiblePieces.stream().map(List::copyOf).toList(),
-                roll, stepsBack, onPieceChosen, onCancelled).start(gameScreen);
+                List.copyOf(opponentEligible), pieces, roll, onPieceChosen, onCancelled).start(gameScreen);
     }
 
     /** Whether the screen is open. */
@@ -232,18 +282,16 @@ public class SurpriseView {
         private final List<String> names;
         private final List<String> colours;
         private final List<Boolean> eligible;
-        private final List<List<Integer>> pieces;
+        private final List<Map<Integer, Integer>> pieces;
         private final int roll;
-        private final int stepsBack;
         private final ObjIntConsumer<String> onPieceChosen;
         private final Runnable onCancelled;
         private final List<Button> opponentButtons = new ArrayList<>();
-        private final boolean[] tried;
         private final VBox rollBox = new VBox();
         private final VBox pieceBox = new VBox(8);
 
         OpponentChoice(String playerName, List<String> names, List<String> colours, List<Boolean> eligible,
-                       List<List<Integer>> pieces, int roll, int stepsBack,
+                       List<Map<Integer, Integer>> pieces, int roll,
                        ObjIntConsumer<String> onPieceChosen, Runnable onCancelled) {
             this.playerName = playerName;
             this.names = names;
@@ -251,94 +299,69 @@ public class SurpriseView {
             this.eligible = eligible;
             this.pieces = pieces;
             this.roll = roll;
-            this.stepsBack = stepsBack;
             this.onPieceChosen = onPieceChosen;
             this.onCancelled = onCancelled;
-            this.tried = new boolean[names.size()];
         }
 
         void start(Parent gameScreen) {
             Label intro = text(playerName + ", choose an opponent. A Standard die roll then decides how far "
                     + "one of their pieces moves back.");
             VBox opponents = new VBox(8);
+            Map<Integer, Button> keys = new HashMap<>();
             for (int i = 0; i < names.size(); i++) {
                 int index = i;
                 Button button = optionButton(i + 1, colours.get(i), names.get(i) + " · " + colourWord(colours.get(i)));
                 button.setOnAction(event -> chooseOpponent(index));
                 if (!eligible.get(i)) {
-                    button.setText(button.getText() + " (cannot be chosen)");
+                    button.setText(button.getText() + " (no piece can move back)");
                     button.setDisable(true);
                 }
                 opponentButtons.add(button);
                 opponents.getChildren().add(button);
+                keys.put(i + 1, button);
             }
             rollBox.managedProperty().bind(rollBox.visibleProperty());
             rollBox.setVisible(false);
             pieceBox.managedProperty().bind(pieceBox.visibleProperty());
             pieceBox.setVisible(false);
             open(gameScreen, playerName, "Opponent moves back", new VBox(10, intro, opponents, rollBox, pieceBox));
-            Map<Integer, Button> keys = new HashMap<>();
-            for (int i = 0; i < opponentButtons.size(); i++) {
-                keys.put(i + 1, opponentButtons.get(i));
-            }
             setNumberedOptions(keys);
             if (eligible.stream().noneMatch(Boolean::booleanValue)) {
-                cancel("No opponent can be chosen, so this surprise is cancelled.");
+                cancel("No opponent has a piece that can move back, so this surprise is cancelled.");
             }
         }
 
         private void chooseOpponent(int index) {
-            if (!eligible.get(index) || tried[index] || stage == null) {
+            if (!eligible.get(index) || stage == null || rollBox.isVisible()) {
                 return;
             }
-            tried[index] = true;
-            showRoll();
-            String name = names.get(index);
-            if (pieces.get(index).isEmpty()) {
-                Button button = opponentButtons.get(index);
-                button.setText(button.getText() + " (no piece can move back " + squares(stepsBack) + ")");
-                button.setDisable(true);
-                boolean anotherLeft = false;
-                for (int i = 0; i < names.size(); i++) {
-                    anotherLeft |= eligible.get(i) && !tried[i];
-                }
-                if (anotherLeft) {
-                    showStatus(name + " has no piece that can move back " + squares(stepsBack)
-                            + ". Choose another opponent; the roll stays " + roll + ".");
-                } else {
-                    cancel(name + " has no piece that can move back " + squares(stepsBack)
-                            + ", and no other opponent can be chosen, so this surprise is cancelled.");
-                }
-                resize();
-                return;
-            }
-
-            // The opponent is settled: lock the list and offer their eligible pieces
-            for (int i = 0; i < opponentButtons.size(); i++) {
-                opponentButtons.get(i).setDisable(true);
-            }
+            opponentButtons.forEach(button -> button.setDisable(true));
             opponentButtons.get(index).setText(opponentButtons.get(index).getText() + " (chosen)");
             opponentButtons.get(index).getStyleClass().add("surprise-option-chosen");
-            status.setVisible(false);
-            String colour = colours.get(index);
+            showRoll();
+
             // Pieces are picked by their own number (key 3 picks piece 3), so no extra key number is shown
+            String name = names.get(index);
+            String colour = colours.get(index);
             List<Button> pieceButtons = new ArrayList<>();
             Map<Integer, Button> keys = new HashMap<>();
-            for (int piece : pieces.get(index)) {
-                Button button = optionButton(0, colour, pieceName(colour, piece));
-                button.setOnAction(event -> choosePiece(index, piece, button, pieceButtons));
+            for (Map.Entry<Integer, Integer> entry : pieces.get(index).entrySet()) {
+                int piece = entry.getKey();
+                int back = entry.getValue();
+                Button button = optionButton(0, colour, pieceName(colour, piece) + " · moves back " + squares(back));
+                button.setOnAction(event -> choosePiece(index, piece, back, button, pieceButtons));
                 pieceButtons.add(button);
                 keys.put(piece, button);
             }
-            pieceBox.getChildren().setAll(text("Choose one of " + name + "'s pieces to move back "
-                    + squares(stepsBack) + " (click it or press its number):"));
+            pieceBox.getChildren().setAll(text("Choose one of " + name + "'s pieces (click it or press its number):"));
             pieceBox.getChildren().addAll(pieceButtons);
             pieceBox.setVisible(true);
             setNumberedOptions(keys);
             resize();
+            scrollToEnd();
         }
 
-        private void choosePiece(int opponent, int piece, Button chosen, List<Button> pieceButtons) {
+        private void choosePiece(int opponent, int piece, int back, Button chosen, List<Button> pieceButtons) {
             if (stage == null || continueButton.isVisible()) {
                 return;
             }
@@ -346,27 +369,28 @@ public class SurpriseView {
             chosen.setText(chosen.getText() + " (chosen)");
             chosen.getStyleClass().add("surprise-option-chosen");
             String name = names.get(opponent);
-            showStatus(name + "'s " + pieceName(colours.get(opponent), piece) + " moves back " + squares(stepsBack) + ".");
+            showStatus(name + "'s " + pieceName(colours.get(opponent), piece) + " moves back " + squares(back) + ".");
             setNumberedOptions(Map.of());
             offerContinue(() -> {
                 if (onPieceChosen != null) {
                     onPieceChosen.accept(name, piece);
                 }
             });
+            // The pieces are at the end of the body; keep the chosen one in view
+            scrollToEnd();
         }
 
         private void showRoll() {
-            if (rollBox.isVisible()) {
-                return;
-            }
             Label value = new Label(String.valueOf(roll));
             value.getStyleClass().add("dice-result-value");
             StackPane die = new StackPane(value);
             die.getStyleClass().add("dice-result");
+            die.setMinSize(Region.USE_PREF_SIZE, Region.USE_PREF_SIZE);
             die.setAccessibleText("Standard die: " + roll);
             Label rolled = new Label("Standard die roll: " + roll);
             rolled.getStyleClass().add("surprise-roll");
-            Label move = text("One piece moves back " + squares(stepsBack) + " (half the roll, rounded up).");
+            Label move = text("A piece moves back half the roll, rounded up, but never past its own Start "
+                    + "Square. Each piece below shows how far it moves.");
             VBox words = new VBox(4, rolled, move);
             HBox.setHgrow(words, Priority.ALWAYS);
             HBox row = new HBox(14, die, words);
@@ -407,6 +431,8 @@ public class SurpriseView {
         continueButton.setDisable(true);
         continueAction = null;
         setNumberedOptions(Map.of());
+        heldKeys.clear();
+        scroll.setVvalue(0);
         content.setAccessibleText("Surprise: " + eventTitle);
 
         stage = new Stage(StageStyle.UNDECORATED);
@@ -422,7 +448,7 @@ public class SurpriseView {
         });
         Scene scene = new Scene(content);
         scene.getStylesheets().addAll(owner.getScene().getStylesheets());
-        scene.addEventFilter(KeyEvent.KEY_PRESSED, this::onKey);
+        scene.addEventFilter(KeyEvent.ANY, this::onKey);
         stage.setScene(scene);
         stage.setOnShown(event -> {
             resize();
@@ -461,7 +487,17 @@ public class SurpriseView {
     }
 
     private void onKey(KeyEvent event) {
-        int number = switch (event.getCode()) {
+        KeyCode code = event.getCode();
+        if (event.getEventType() == KeyEvent.KEY_RELEASED) {
+            heldKeys.remove(code);
+            return;
+        }
+        if (event.getEventType() != KeyEvent.KEY_PRESSED) {
+            return;
+        }
+        // Auto-repeat while a key is held must not make further choices
+        boolean repeat = !heldKeys.add(code);
+        int number = switch (code) {
             case DIGIT1, NUMPAD1 -> 1;
             case DIGIT2, NUMPAD2 -> 2;
             case DIGIT3, NUMPAD3 -> 3;
@@ -470,28 +506,43 @@ public class SurpriseView {
         };
         if (number != 0) {
             Button option = numberedOptions.get(number);
-            if (option != null && !option.isDisable()) {
+            if (!repeat && option != null && !option.isDisable()) {
                 option.fire();
             }
             event.consume();
-        } else if (event.getCode() == KeyCode.ESCAPE) {
-            // There is nothing to cancel: the surprise must be finished
+        } else if (code == KeyCode.ESCAPE || (repeat && (code == KeyCode.ENTER || code == KeyCode.SPACE))) {
+            // Escape: nothing to cancel. A held Enter or Space must not press Continue on repeat.
             event.consume();
         }
     }
 
+    /** Fits the content, but never taller than the screen, so Continue is always on screen. */
     private void resize() {
         if (stage == null || !stage.isShowing()) {
             return;
         }
+        Node scrolled = scroll.getContent();
+        // Newly added choices must have their styles before their height is measured
+        content.applyCss();
+        scroll.setPrefViewportHeight(scrolled.prefHeight(INNER_WIDTH));
         stage.sizeToScene();
         Window owner = stage.getOwner();
         Rectangle2D area = Screen.getScreensForRectangle(owner.getX(), owner.getY(), owner.getWidth(), owner.getHeight())
                 .stream().findFirst().orElse(Screen.getPrimary()).getVisualBounds();
+        double maxHeight = area.getHeight() - 2 * SCREEN_MARGIN;
+        if (stage.getHeight() > maxHeight) {
+            stage.setHeight(maxHeight);
+        }
         double x = owner.getX() + (owner.getWidth() - stage.getWidth()) / 2;
         double y = owner.getY() + (owner.getHeight() - stage.getHeight()) / 2;
         stage.setX(Math.max(area.getMinX(), Math.min(x, area.getMaxX() - stage.getWidth())));
-        stage.setY(Math.max(area.getMinY() + SCREEN_MARGIN, Math.min(y, area.getMaxY() - stage.getHeight())));
+        stage.setY(Math.max(area.getMinY() + SCREEN_MARGIN, Math.min(y, area.getMaxY() - SCREEN_MARGIN - stage.getHeight())));
+    }
+
+    /** Brings newly offered choices at the bottom of the body into view. */
+    private void scrollToEnd() {
+        scroll.layout();
+        scroll.setVvalue(scroll.getVmax());
     }
 
     /**
@@ -518,6 +569,9 @@ public class SurpriseView {
         Label label = new Label(sentence);
         label.getStyleClass().add("surprise-text");
         label.setWrapText(true);
+        // A definite width, so a wrapping line's height is computed for the width it really gets
+        label.setPrefWidth(INNER_WIDTH - 40);
+        label.setMaxWidth(Double.MAX_VALUE);
         return label;
     }
 
