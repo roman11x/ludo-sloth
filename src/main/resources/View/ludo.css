@@ -273,6 +273,74 @@
     -fx-text-fill: #8a8a8a;
 }
 
+/* ---------- Surprise screen ---------- */
+
+/* A heavy frame, since the screen's window has no title bar of its own. */
+.surprise-dialog {
+    -fx-background-color: white;
+    -fx-border-color: #1a1a1a;
+    -fx-border-width: 4;
+    -fx-padding: 20 24 20 24;
+    -fx-focus-color: #1a1a1a;
+    -fx-faint-focus-color: transparent;
+}
+
+.surprise-player {
+    -fx-font-size: 15px;
+    -fx-text-fill: #1a1a1a;
+}
+
+.surprise-title {
+    -fx-font-size: 26px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+.surprise-text {
+    -fx-font-size: 16px;
+    -fx-text-fill: #1a1a1a;
+}
+
+.surprise-roll {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+/* What happened, or why the event is cancelled: bold, with a rule above it. */
+.surprise-status {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+    -fx-border-color: #1a1a1a;
+    -fx-border-width: 2 0 0 0;
+    -fx-padding: 10 0 0 0;
+}
+
+/* Choices: the chunky button frame, white fill, text on the left. */
+.surprise-option {
+    -fx-alignment: center-left;
+    -fx-padding: 8 12 8 12;
+    -fx-font-size: 15px;
+    -fx-text-fill: #1a1a1a;
+}
+
+.surprise-option:hover {
+    -ludo-fill: #eeeeee;
+}
+
+/* A choice that cannot be picked: faded, and its text says why. */
+.surprise-option:disabled {
+    -fx-opacity: 0.55;
+}
+
+/* The picked choice stays fully visible with a heavier frame, and its text says "(chosen)". */
+.surprise-option.surprise-option-chosen:disabled {
+    -fx-opacity: 1;
+    -fx-border-width: 5;
+    -fx-font-weight: bold;
+}
+
 /* Board squares: the outline comes from .board-square, the fill from one of the fill classes. */
 .board-square {
     -fx-stroke: #1a1a1a;
