@@ -1,6 +1,7 @@
 package Controller;
 
 import Model.Difficulty;
+import Model.Game;
 import Model.PlayerColor;
 import Model.PlayerSetup;
 import org.junit.jupiter.api.Test;
@@ -114,4 +115,44 @@ class SetupControllerTest {
         assertTrue(result.players().isEmpty());
     }
 
+    @Test
+    void convertsTheScreensDifficultyNamesAndRejectsAnythingElse() {
+        assertEquals(Difficulty.EASY, SetupController.parseDifficulty("Easy"));
+        assertEquals(Difficulty.MEDIUM, SetupController.parseDifficulty("Medium"));
+        assertEquals(Difficulty.MEDIUM, SetupController.parseDifficulty(" medium "));
+        for (String other : new String[]{null, "", "Hard", "Expert"}) {
+            assertNull(SetupController.parseDifficulty(other), String.valueOf(other));
+        }
+        var none = SetupController.parseAndValidateSetup(List.of("Razi", "Roman"), List.of("Green", "Red"),
+                SetupController.parseDifficulty(null));
+        assertEquals(List.of("Please select a difficulty"), none.errors());
+    }
+
+    @Test
+    void easyGameStartsWithTheChosenPlayersAndKeepsThemFixed() {
+        List<String> names = new ArrayList<>(List.of("Razi", "Roman"));
+        List<String> colours = new ArrayList<>(List.of("Blue", "Red"));
+        var input = SetupController.parseAndValidateSetup(names, colours, SetupController.parseDifficulty("Easy"));
+        Game game = SetupController.createGame(input.players(), Difficulty.EASY);
+        names.set(0, "Changed");
+        colours.set(0, "Green");
+        assertEquals(Difficulty.EASY, game.difficulty());
+        assertEquals(2, game.players().size());
+        assertTrue(game.players().stream().anyMatch(p -> p.name().equals("Razi") && p.color() == PlayerColor.BLUE));
+        assertTrue(game.players().stream().anyMatch(p -> p.name().equals("Roman") && p.color() == PlayerColor.RED));
+        assertThrows(UnsupportedOperationException.class, () -> game.players().clear());
+    }
+
+    @Test
+    void mediumGameStartsAtMediumOrReportsTheBoardIsNotAvailableYet() {
+        var input = SetupController.parseAndValidateSetup(List.of("Razi", "Roman"), List.of("Blue", "Red"),
+                Difficulty.MEDIUM);
+        assertTrue(input.errors().isEmpty());
+        Game game = SetupController.createGame(input.players(), Difficulty.MEDIUM);
+        if (game != null) {
+            assertEquals(Difficulty.MEDIUM, game.difficulty());
+        }
+        assertEquals("The Medium board is not available yet",
+                SetupController.boardNotAvailableMessage(Difficulty.MEDIUM));
+    }
 }
