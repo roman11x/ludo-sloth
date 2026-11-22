@@ -273,6 +273,31 @@
     -fx-text-fill: #8a8a8a;
 }
 
+/* Medium: each die is named above its box. */
+.dice-name {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+/* UltraBoost die: a second inner frame, on top of its name and the SURPRISE TURN tag. */
+.dice-result.dice-ultraboost {
+    -fx-border-color: #1a1a1a, #1a1a1a;
+    -fx-border-width: 3, 2;
+    -fx-border-insets: 0, 6;
+}
+
+.dice-move {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1a1a1a;
+}
+
+.dice-move-reason {
+    -fx-font-size: 13px;
+    -fx-text-fill: #1a1a1a;
+}
+
 /* Board squares: the outline comes from .board-square, the fill from one of the fill classes. */
 .board-square {
     -fx-stroke: #1a1a1a;

@@ -11,9 +11,13 @@ import Controller.ResultsController;
 import Controller.SetupController;
 import Controller.WindowCloseGuard;
 import javafx.application.Application;
+import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.Label;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 /**
@@ -49,7 +53,7 @@ public class LudoApp extends Application {
     }
 
     /**
-     * Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-results,
+     * Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-dice, --dev-results,
      * --dev-results-save-error, --dev-history, --dev-history-empty or --dev-history-error
      * opens that screen directly instead of the Main Menu.
      * Returns {@code false} for a normal launch.
@@ -95,12 +99,49 @@ public class LudoApp extends Application {
             game.setOnMainMenu(mainMenu::show);
             new ResultsController(showScreen, mainMenu::show, newGame).showWhenOver(game);
             showScreen.accept(board.getRoot());
+        } else if (launchArgs.contains("--dev-dice")) {
+            showScreen.accept(devDicePreview());
         } else if (launchArgs.contains("--dev-setup")) {
             showScreen.accept(new SetupView().getRoot());
         } else {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Development only: the dice area on its own, stepping through one case per Roll press with
+     * fixed values (no game is played).
+     */
+    private static Parent devDicePreview() {
+        DiceView dice = new DiceView();
+        Label caption = new Label("Press Roll for case 1 of 5: Easy, 4.");
+        caption.getStyleClass().add("ludo-message");
+        caption.setWrapText(true);
+        List<String> captions = List.of(
+                "Case 1 of 5: Easy, 4.",
+                "Case 2 of 5: Medium, 6 and 3, 12 steps.",
+                "Case 3 of 5: Medium, 5 and 1, 0 steps.",
+                "Case 4 of 5: UltraBoost surprise turn, 4 and 6, 20 steps.",
+                "Case 5 of 5: Medium again, 2 and 2, 2 steps. End of preview.");
+        List<Runnable> cases = List.of(
+                () -> dice.showResult(4),
+                () -> { dice.setMediumMode(); dice.showMediumResult(6, 3, 12); },
+                () -> dice.showMediumResult(5, 1, 0),
+                () -> { dice.setUltraBoostTurn(); dice.showMediumResult(4, 6, 20); },
+                () -> { dice.setMediumMode(); dice.showMediumResult(2, 2, 2, () -> dice.setRollEnabled(false)); });
+        int[] next = {0};
+        dice.setOnRoll(() -> {
+            if (next[0] >= cases.size()) return;
+            caption.setText(captions.get(next[0]));
+            cases.get(next[0]++).run();
+        });
+        VBox side = new VBox(16, dice.getRoot(), caption);
+        side.setMaxWidth(250);
+        StackPane page = new StackPane(side);
+        StackPane.setAlignment(side, Pos.TOP_CENTER);
+        page.getStyleClass().add("ludo-board-screen");
+        return page;
     }
 
     public static void main(String[] args) {
