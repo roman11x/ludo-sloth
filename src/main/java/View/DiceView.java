@@ -198,9 +198,9 @@ public class DiceView {
      *
      * @param standard the Standard die, 1–6
      * @param special  the Boost die (1–3), or the UltraBoost die (1–6) during a surprise turn
-     * @param steps    the move the game computed: {@code standard × (special − 1)}
+     * @param steps    the move the game decided; shown as given
      * @throws IllegalStateException    if the area is in Easy mode
-     * @throws IllegalArgumentException if a die is out of range or {@code steps} does not match
+     * @throws IllegalArgumentException if a die is out of range
      */
     public void showMediumResult(int standard, int special, int steps) {
         showMediumResult(standard, special, steps, null);
@@ -218,10 +218,6 @@ public class DiceView {
         if (standard < 1 || standard > STANDARD_FACES || special < 1 || special > specialFaces) {
             throw new IllegalArgumentException("Dice must be Standard 1–" + STANDARD_FACES + " and "
                     + specialName() + " 1–" + specialFaces);
-        }
-        if (steps != standard * (special - 1)) {
-            throw new IllegalArgumentException("A move of " + steps + " does not match "
-                    + standard + " × (" + special + " − 1)");
         }
         animate(standard, special, () -> {
             showMove(standard, special, steps);
