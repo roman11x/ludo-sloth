@@ -11,6 +11,7 @@ import Controller.ResultsController;
 import Controller.SetupController;
 import Controller.WindowCloseGuard;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -53,7 +54,7 @@ public class LudoApp extends Application {
     }
 
     /**
-     * Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-dice, --dev-results,
+     * Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-dice, --dev-question, --dev-results,
      * --dev-results-save-error, --dev-history, --dev-history-empty or --dev-history-error
      * opens that screen directly instead of the Main Menu.
      * Returns {@code false} for a normal launch.
@@ -99,6 +100,13 @@ public class LudoApp extends Application {
             game.setOnMainMenu(mainMenu::show);
             new ResultsController(showScreen, mainMenu::show, newGame).showWhenOver(game);
             showScreen.accept(board.getRoot());
+        } else if (launchArgs.contains("--dev-question")) {
+            // A real Easy board with the question dialog over it, once the window is showing
+            BoardView board = new BoardView();
+            GameController game = new GameController(board, sampleNames, sampleColours);
+            game.setOnMainMenu(mainMenu::show);
+            showScreen.accept(board.getRoot());
+            Platform.runLater(() -> devQuestionPreview(board));
         } else if (launchArgs.contains("--dev-dice")) {
             showScreen.accept(devDicePreview());
         } else if (launchArgs.contains("--dev-setup")) {
@@ -142,6 +150,42 @@ public class LudoApp extends Application {
         StackPane.setAlignment(side, Pos.TOP_CENTER);
         page.getStyleClass().add("ludo-board-screen");
         return page;
+    }
+
+    /**
+     * Development only: a Medium sample question, then a Hard one after Continue. The preview,
+     * not the dialog, decides right and wrong; Roll is unavailable while a question is open.
+     */
+    private static void devQuestionPreview(BoardView board) {
+        record Sample(String player, String level, String text, List<String> answers, int correct, int squares) { }
+        List<Sample> samples = List.of(
+                new Sample("Maya", "Medium",
+                        "Which design pattern lets an object notify its dependents when its state changes?",
+                        List.of("Singleton", "Factory Method", "Observer", "Adapter"), 3, 2),
+                new Sample("Daniel", "Hard",
+                        "Which UML diagram shows the order of messages between objects over time?",
+                        List.of("Class diagram", "Sequence diagram", "Use case diagram", "Component diagram"), 2, 3));
+        DiceView dice = board.getDiceView();
+        QuestionView dialog = new QuestionView();
+        int[] current = {0};
+        Runnable open = () -> {
+            Sample sample = samples.get(current[0]);
+            dice.setEffectResolving(true);
+            dialog.show(board.getRoot(), sample.player(), sample.level(), sample.text(), sample.answers());
+        };
+        dialog.setOnAnswerChosen(number -> {
+            Sample sample = samples.get(current[0]);
+            boolean correct = number == sample.correct();
+            dialog.showFeedback(correct, sample.correct(),
+                    (correct ? "Move forward " : "Move back ") + sample.squares() + " squares");
+        });
+        dialog.setOnContinue(() -> {
+            dice.setEffectResolving(false);
+            if (++current[0] < samples.size()) {
+                open.run();
+            }
+        });
+        open.run();
     }
 
     public static void main(String[] args) {
