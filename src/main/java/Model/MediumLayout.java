@@ -1,8 +1,10 @@
 package Model;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
-/** Fixed Medium geometry; random special-square placement is added separately in B03. */
+/** Medium geometry with per-game protected, question and surprise square placement. */
 public final class MediumLayout extends BoardLayout {
     private static final int MIN = 1;
     private static final int MAX = 17;
@@ -47,6 +49,32 @@ public final class MediumLayout extends BoardLayout {
 
     @Override
     protected void placeSpecialSquares(Square[][] squares, Random random) {
-        // B02 builds fixed geometry only. B03 will place Medium stars, questions and surprises.
+        List<Position> candidates = new ArrayList<>();
+        for (Square[] row : squares) {
+            for (Square square : row) {
+                if (square.status() == SquareStatus.ACTIVE && square.type() == SquareType.NORMAL) {
+                    candidates.add(square.position());
+                }
+            }
+        }
+        // Remove each selection from the same pool: no two special squares can overlap.
+        for (int count = 0; count < 8; count++) {
+            placeRandomSquare(squares, candidates, random, SquareType.PROTECTED, null);
+        }
+        for (QuestionDifficulty difficulty : QuestionDifficulty.values()) {
+            for (int count = 0; count < 2; count++) {
+                placeRandomSquare(squares, candidates, random, SquareType.QUESTION, difficulty);
+            }
+        }
+        for (int count = 0; count < 2; count++) {
+            placeRandomSquare(squares, candidates, random, SquareType.SURPRISE, null);
+        }
+    }
+
+    private void placeRandomSquare(Square[][] squares, List<Position> candidates, Random random,
+                                   SquareType type, QuestionDifficulty questionDifficulty) {
+        Position position = candidates.remove(random.nextInt(candidates.size()));
+        defineSquare(squares, position.row(), position.column(), type,
+                SquareColor.NEUTRAL, SquareStatus.ACTIVE, questionDifficulty);
     }
 }

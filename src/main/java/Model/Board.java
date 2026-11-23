@@ -49,12 +49,12 @@ public final class Board {
         return new EasyLayout().build(random);
     }
 
-    /** Creates fixed Medium geometry; B03 adds random protected, question and surprise squares. */
+    /** Creates Medium geometry and randomly places 8 protected, 6 question and 2 surprise squares. */
     public static Board createMedium() {
         return new MediumLayout().build();
     }
 
-    /** Seeded entry point retained for the upcoming special-square placement stage. */
+    /** Allows reproducible Medium layouts by supplying a seeded Random. */
     public static Board createMedium(Random random) {
         return new MediumLayout().build(random);
     }

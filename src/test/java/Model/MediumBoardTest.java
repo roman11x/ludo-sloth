@@ -25,15 +25,14 @@ class MediumBoardTest {
                 if (onOuterRing) {
                     outerCount++;
                     assertTrue(board.isActive(position));
-                    assertTrue(List.of(SquareType.NORMAL, SquareType.START, SquareType.ARROW).contains(square.type()));
+                    assertTrue(List.of(SquareType.NORMAL, SquareType.START, SquareType.ARROW,
+                            SquareType.PROTECTED, SquareType.QUESTION, SquareType.SURPRISE).contains(square.type()));
                 }
                 if (row == 0 || row == 18 || column == 0 || column == 18) {
                     assertEquals(SquareType.EMPTY, square.type());
                     assertEquals(SquareStatus.INACTIVE, square.status());
                 }
                 if (board.isActive(position)) activeCount++;
-                // B03, not B02, supplies the random special squares.
-                assertFalse(List.of(SquareType.PROTECTED, SquareType.QUESTION, SquareType.SURPRISE).contains(square.type()));
             }
         }
         assertEquals(64, outerCount);
@@ -77,9 +76,16 @@ class MediumBoardTest {
                 Position position = new Position(row, column);
                 Square oldSquare = easy.squareAt(position);
                 Square actual = board.squareAt(position);
-                boolean nowNormal = oldSquare.type() == SquareType.START || oldSquare.type() == SquareType.PROTECTED;
-                assertEquals(nowNormal ? SquareType.NORMAL : oldSquare.type(), actual.type());
-                assertEquals(nowNormal ? SquareColor.NEUTRAL : oldSquare.associatedColor(), actual.associatedColor());
+                boolean ordinaryShared = List.of(SquareType.NORMAL, SquareType.START,
+                        SquareType.PROTECTED).contains(oldSquare.type());
+                if (ordinaryShared) {
+                    assertTrue(List.of(SquareType.NORMAL, SquareType.PROTECTED,
+                            SquareType.QUESTION, SquareType.SURPRISE).contains(actual.type()));
+                } else {
+                    assertEquals(oldSquare.type(), actual.type());
+                }
+                assertEquals(ordinaryShared ? SquareColor.NEUTRAL : oldSquare.associatedColor(),
+                        actual.associatedColor());
                 assertEquals(oldSquare.status(), actual.status());
                 assertTrue(actual.pieces().isEmpty());
             }
