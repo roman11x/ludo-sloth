@@ -517,6 +517,44 @@
     -fx-fill: #1a1a1a;
 }
 
+/* Question square: "?" in the level's colour (green / yellow / red for easy / medium / hard, as the
+   rules require), outlined so it stays readable on white, with the level's letter in the corner. */
+.board-question {
+    -fx-font-size: 30px;
+    -fx-font-weight: bold;
+    -fx-stroke: #1a1a1a;
+    -fx-stroke-width: 1;
+}
+
+.board-question-easy {
+    -fx-fill: #2e7d32;
+}
+
+.board-question-medium {
+    -fx-fill: #fbc02d;
+}
+
+.board-question-hard {
+    -fx-fill: #d32f2f;
+}
+
+.board-question-level {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-fill: #1a1a1a;
+}
+
+/* Surprise square: a plain gift outline. */
+.board-gift {
+    -fx-fill: white;
+    -fx-stroke: #1a1a1a;
+    -fx-stroke-width: 1.5;
+}
+
+.board-gift-ribbon {
+    -fx-fill: #1a1a1a;
+}
+
 .board-castle-yard {
     -fx-fill: white;
     -fx-stroke: #1a1a1a;

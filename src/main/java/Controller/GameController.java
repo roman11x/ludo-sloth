@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 
-import Model.Board;
 import Model.Difficulty;
 import Model.Game;
 import Model.GameListener;
@@ -17,7 +16,6 @@ import Model.Piece;
 import Model.Player;
 import Model.PlayerColor;
 import Model.Position;
-import Model.SquareType;
 import Model.TurnPhase;
 import Model.TurnRoll;
 import View.BoardView;
@@ -37,12 +35,11 @@ import javafx.util.Duration;
  */
 public class GameController implements GameListener {
 
-    // The Model's square storage grid holds the board grid in its middle
-    private static final int GRID_OFFSET = (Board.STORAGE_SIZE - BoardView.GRID_SIZE) / 2;
     private static final String[] PLACES = {"1st", "2nd", "3rd", "4th"};
 
     private final Game game;
     private final BoardView boardView;
+    private final BoardSquares boardSquares;
     private final DiceView diceView;
     private final Timeline clock;
     // How long the board shows its final message before the game end is reported
@@ -83,6 +80,7 @@ public class GameController implements GameListener {
     public GameController(BoardView boardView, Game game) {
         this.boardView = Objects.requireNonNull(boardView, "boardView");
         this.game = Objects.requireNonNull(game, "game");
+        this.boardSquares = BoardSquares.of(game.board(), game.routes());
         this.diceView = boardView.getDiceView();
         diceView.setOnRoll(this::roll);
         boardView.setOnPieceChosen(this::pieceChosen);
@@ -93,8 +91,8 @@ public class GameController implements GameListener {
             colours.add(colourName(player.color()));
             names.add(player.name());
         }
+        boardSquares.showOn(boardView);
         boardView.showPlayers(colours, names);
-        boardView.showProtectedSquares(protectedSquares());
         showPieces();
 
         clock = new Timeline(new KeyFrame(Duration.millis(250), event -> showElapsedTime()));
@@ -328,7 +326,7 @@ public class GameController implements GameListener {
 
     private void showPiece(Piece piece, Position position) {
         boardView.showPiece(colourName(piece.color()), piece.number(),
-                position.row() - GRID_OFFSET, position.column() - GRID_OFFSET);
+                boardSquares.gridRow(position), boardSquares.gridColumn(position));
     }
 
     private Map<Piece, Position> piecePositions() {
@@ -339,19 +337,6 @@ public class GameController implements GameListener {
             }
         }
         return positions;
-    }
-
-    private List<int[]> protectedSquares() {
-        List<int[]> squares = new ArrayList<>();
-        Board board = game.board();
-        for (int row = 0; row < Board.STORAGE_SIZE; row++) {
-            for (int column = 0; column < Board.STORAGE_SIZE; column++) {
-                if (board.squareAt(new Position(row, column)).type() == SquareType.PROTECTED) {
-                    squares.add(new int[]{row - GRID_OFFSET, column - GRID_OFFSET});
-                }
-            }
-        }
-        return squares;
     }
 
     private Player currentPlayer() {
