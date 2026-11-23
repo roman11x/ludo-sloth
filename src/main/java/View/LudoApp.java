@@ -2,7 +2,11 @@ package View;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.ObjIntConsumer;
 
 import Controller.GameController;
 import Controller.HistoryController;
@@ -54,7 +58,8 @@ public class LudoApp extends Application {
     }
 
     /**
-     * Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-dice, --dev-question, --dev-results,
+     * Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-dice, --dev-question,
+     * --dev-surprise, --dev-results,
      * --dev-results-save-error, --dev-history, --dev-history-empty or --dev-history-error
      * opens that screen directly instead of the Main Menu.
      * Returns {@code false} for a normal launch.
@@ -107,6 +112,13 @@ public class LudoApp extends Application {
             game.setOnMainMenu(mainMenu::show);
             showScreen.accept(board.getRoot());
             Platform.runLater(() -> devQuestionPreview(board));
+        } else if (launchArgs.contains("--dev-surprise")) {
+            // A real Easy board with the surprise screens over it, once the window is showing
+            BoardView board = new BoardView();
+            GameController game = new GameController(board, sampleNames, sampleColours);
+            game.setOnMainMenu(mainMenu::show);
+            showScreen.accept(board.getRoot());
+            Platform.runLater(() -> devSurprisePreview(board));
         } else if (launchArgs.contains("--dev-dice")) {
             showScreen.accept(devDicePreview());
         } else if (launchArgs.contains("--dev-setup")) {
@@ -115,6 +127,58 @@ public class LudoApp extends Application {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Development only: the six surprise events in turn, each after Continue, then "Opponent moves
+     * back" twice more: with three opponents and four eligible pieces (the screen scrolls), and with
+     * no opponent that qualifies. In the first one the first opponent has no piece that can move
+     * back, and one piece stops at its Start Square; "Back 3 squares" also stops there. The preview,
+     * not the screen, supplies the eligibility, roll and distances; what the screen reports back is
+     * shown in the board's message line.
+     */
+    private static void devSurprisePreview(BoardView board) {
+        Parent screen = board.getRoot();
+        DiceView dice = board.getDiceView();
+        SurpriseView surprise = new SurpriseView();
+        List<String> opponents = List.of("Daniel", "Noa", "Omer");
+        List<String> colours = List.of("Green", "Yellow", "Blue");
+        BiFunction<Runnable, String, ObjIntConsumer<String>> reportPick = (next, preview) -> (name, piece) -> {
+            board.showMessage("Preview (" + preview + "): the surprise screen reported " + name + "'s piece " + piece + ".");
+            next.run();
+        };
+        Function<Runnable, Runnable> reportCancel = next -> () -> {
+            board.showMessage("Preview: the surprise screen reported that the event was cancelled.");
+            next.run();
+        };
+        List<Consumer<Runnable>> events = List.of(
+                next -> surprise.showStraightToFinish(screen, "Maya", "Red", 2, next),
+                next -> surprise.showOpponentMovesBack(screen, "Maya", opponents, colours,
+                        List.of(false, true, false), List.of(Map.of(), Map.of(1, 3, 3, 2), Map.of()), 5,
+                        reportPick.apply(next, "one opponent eligible"), reportCancel.apply(next)),
+                next -> surprise.showBackToCastle(screen, "Maya", "Red", 4, next),
+                next -> surprise.showBackThreeSquares(screen, "Maya", "Red", 1, 2, next),
+                next -> surprise.showLoseNextTurn(screen, "Maya", next),
+                next -> surprise.showExtraTurnWithUltraBoost(screen, "Maya", next),
+                next -> surprise.showOpponentMovesBack(screen, "Maya", opponents, colours,
+                        List.of(true, true, true),
+                        List.of(Map.of(1, 3, 2, 3, 3, 1, 4, 2), Map.of(2, 3), Map.of(4, 1)), 6,
+                        reportPick.apply(next, "three opponents, four pieces"), reportCancel.apply(next)),
+                next -> surprise.showOpponentMovesBack(screen, "Maya", opponents, colours,
+                        List.of(false, false, false), List.of(Map.of(), Map.of(), Map.of()), 2,
+                        reportPick.apply(next, "no opponent eligible"), reportCancel.apply(next)));
+        int[] current = {0};
+        Runnable[] showNext = new Runnable[1];
+        showNext[0] = () -> {
+            if (current[0] < events.size()) {
+                events.get(current[0]++).accept(showNext[0]);
+            } else {
+                board.showMessage("Surprise preview finished: all six events and the extra cases of event 2 were shown.");
+                dice.setRollEnabled(true);
+            }
+        };
+        dice.setRollEnabled(false);
+        showNext[0].run();
     }
 
     /**
