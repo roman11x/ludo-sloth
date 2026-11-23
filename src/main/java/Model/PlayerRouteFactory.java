@@ -1,5 +1,6 @@
 package Model;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -10,7 +11,24 @@ public final class PlayerRouteFactory {
 
     /** Includes Start, the shared squares, the Home Path and Finish; excludes Castle. */
     public static Map<PlayerColor, PlayerRoute> createEasy() {
-        List<Position> green = greenEasyCoordinates();
+        return routesFromGreen(greenEasyCoordinates());
+    }
+
+    /** Outer Start to outer Arrow, one full inner circuit, then Home Path and Finish. */
+    public static Map<PlayerColor, PlayerRoute> createMedium() {
+        List<Position> green = new ArrayList<>();
+        // Clockwise from the green corner (1,1), stopping at its outer arrow (8,1).
+        for (int column = 1; column <= 17; column++) green.add(new Position(1, column));
+        for (int row = 2; row <= 17; row++) green.add(new Position(row, 17));
+        for (int column = 16; column >= 1; column--) green.add(new Position(17, column));
+        for (int row = 16; row >= 8; row--) green.add(new Position(row, 1));
+        // The arrow points right onto the inner ring, before the former Easy Start.
+        green.add(new Position(8, 2));
+        green.addAll(greenEasyCoordinates());
+        return routesFromGreen(green);
+    }
+
+    private static Map<PlayerColor, PlayerRoute> routesFromGreen(List<Position> green) {
         List<Position> yellow = rotateClockwise(green);
         List<Position> blue = rotateClockwise(yellow);
         List<Position> red = rotateClockwise(blue);

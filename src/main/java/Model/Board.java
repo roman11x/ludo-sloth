@@ -1,6 +1,7 @@
 package Model;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,16 @@ public final class Board {
     /** Allows reproducible layouts in tests by supplying a seeded Random. */
     public static Board createEasy(Random random) {
         return new EasyLayout().build(random);
+    }
+
+    /** Creates fixed Medium geometry; B03 adds random protected, question and surprise squares. */
+    public static Board createMedium() {
+        return new MediumLayout().build();
+    }
+
+    /** Seeded entry point retained for the upcoming special-square placement stage. */
+    public static Board createMedium(Random random) {
+        return new MediumLayout().build(random);
     }
 
     /** Whether the coordinate is inside the storage matrix, active or not. */
@@ -144,8 +155,29 @@ public final class Board {
         return findPosition(SquareType.START, color);
     }
 
+    /** Innermost arrow leading to this color's Home Path, also on multi-ring boards. */
     public Position arrowFor(PlayerColor color) {
-        return findPosition(SquareType.ARROW, color);
+        return arrowsFor(color).getLast();
+    }
+
+    /** All arrows for the color, ordered from the outermost path toward Home. */
+    public List<Position> arrowsFor(PlayerColor color) {
+        SquareColor associatedColor = SquareColor.fromPlayerColor(
+                Objects.requireNonNull(color, "color"));
+        List<Position> arrows = new ArrayList<>();
+        for (Cell[] row : cells) {
+            for (Cell cell : row) {
+                Square square = cell.square;
+                if (square.type() == SquareType.ARROW && square.associatedColor() == associatedColor) {
+                    arrows.add(square.position());
+                }
+            }
+        }
+        if (arrows.isEmpty()) throw new IllegalStateException("Missing ARROW for " + color);
+        int center = STORAGE_SIZE / 2;
+        arrows.sort(Comparator.comparingInt((Position p) ->
+                Math.abs(p.row() - center) + Math.abs(p.column() - center)).reversed());
+        return List.copyOf(arrows);
     }
 
     private Position findPosition(SquareType type, PlayerColor color) {
