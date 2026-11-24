@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Random;
 import java.util.function.Consumer;
 
@@ -193,6 +194,37 @@ public final class Game {
         } else {
             Player next = turnManager.currentPlayer();
             events.add(listener -> listener.turnPassed(next));
+        }
+        notifyListeners(events);
+        return move;
+    }
+
+    /**
+     * Executes a backward movement requested by a question/surprise effect.
+     * The piece may belong to any participant, including an opponent. The caller
+     * selects eligible pieces and resolves any resulting square effects separately.
+     * Reuses the normal movement/capture implementation and notifies listeners only
+     * after the board and pending roll choices have been updated. Does not roll,
+     * complete a turn, alter six counts or assign ranks. Returns empty without
+     * notifications when no movement is possible.
+     */
+    public Optional<MoveCandidate> moveBackward(Piece piece, int steps) {
+        Objects.requireNonNull(piece, "piece");
+        if (isFinished()) throw new IllegalStateException("The game is over");
+        Player owner = players.stream().filter(player -> player.pieces().contains(piece))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException(
+                        "Piece does not belong to a participant"));
+        Optional<MoveCandidate> move = moveGenerator.generateBackward(board, piece, steps)
+                .flatMap(candidate -> moveRules.legalEventMove(board, candidate));
+        if (move.isEmpty()) return Optional.empty();
+
+        List<Consumer<GameListener>> events = new ArrayList<>();
+        applyMove(owner, move.get(), events);
+        if (turnManager.phase() == TurnPhase.WAITING_FOR_MOVE) {
+            // An effect may move a source, remove a block or occupy a destination.
+            // Refresh choices for the SAME roll, without resolving or passing the turn.
+            legalMoves = moveRules.legalMoves(board, moveGenerator.generate(board,
+                    turnManager.currentPlayer().color(), turnManager.pendingRollValue()));
         }
         notifyListeners(events);
         return move;
