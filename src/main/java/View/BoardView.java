@@ -1,6 +1,7 @@
 package View;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,34 +37,60 @@ import javafx.scene.text.Text;
 /**
  * Displays the game board screen.
  * <p>
- * Squares are addressed in board grid coordinates: row and column 0 to {@link #GRID_SIZE} - 1,
- * from the top-left corner. Colours are named "Red", "Green", "Yellow" or "Blue" (any case).
+ * The board is drawn from the squares given to {@link #showBoard(int, List)}, so any board the
+ * game describes (Easy 15×15, Medium 17×17) is shown, special squares included. Squares are
+ * addressed in board grid coordinates: row and column 0 to the grid size - 1, from the top-left
+ * corner. Colours are named "Red", "Green", "Yellow" or "Blue" (any case).
  */
 public class BoardView {
 
-    /** Number of rows and columns of the board grid. */
-    public static final int GRID_SIZE = 15;
+    /**
+     * One square to draw, in board grid coordinates, as plain values.
+     *
+     * @param kind      "path", "protected", "start", "arrow", "home", "finish", "castle",
+     *                  "question" or "surprise"
+     * @param colour    the colour a start, arrow, home, finish or castle square belongs to;
+     *                  {@code null} for the other kinds
+     * @param level     "Easy", "Medium" or "Hard" for a question square; {@code null} otherwise
+     * @param direction "up", "down", "left" or "right" for an arrow: the way that colour's pieces
+     *                  turn there; {@code null} otherwise
+     */
+    public record BoardSquare(int row, int column, String kind, String colour, String level, String direction) {
+        public BoardSquare {
+            if (!KINDS.contains(kind)) {
+                throw new IllegalArgumentException("Unknown square kind: " + kind);
+            }
+            if (COLOURED_KINDS.contains(kind)) {
+                colourIndex(colour);
+            } else if (colour != null) {
+                throw new IllegalArgumentException("A " + kind + " square has no colour");
+            }
+            if (kind.equals("question") != (level != null) || (level != null && !LEVELS.contains(level))) {
+                throw new IllegalArgumentException("A question square, and only one, has a level: Easy, Medium or Hard");
+            }
+            if (kind.equals("arrow") != (direction != null) || (direction != null && !DIRECTIONS.containsKey(direction))) {
+                throw new IllegalArgumentException("An arrow, and only an arrow, has a direction: up, down, left or right");
+            }
+        }
+    }
+
+    private static final List<String> KINDS = List.of(
+            "path", "protected", "start", "arrow", "home", "finish", "castle", "question", "surprise");
+    private static final List<String> COLOURED_KINDS = List.of("start", "arrow", "home", "finish", "castle");
+    // Squares of the playing path: drawn as a plain square first, then marked
+    private static final List<String> PATH_KINDS = List.of("path", "protected", "start", "arrow", "question", "surprise");
+    private static final List<String> LEVELS = List.of("Easy", "Medium", "Hard");
+    // Arrow rotation for each direction; the arrow shape points right
+    private static final Map<String, Double> DIRECTIONS = Map.of("right", 0.0, "down", 90.0, "left", 180.0, "up", -90.0);
 
     private static final double CELL = 40;
-    private static final double BOARD_SIZE = GRID_SIZE * CELL;
     private static final int CASTLE_CELLS = 6;
     private static final double CASTLE_INSET = 30;
     private static final double SIDE_WIDTH = 250;
-    private static final int HOME_PATH_LENGTH = 6;
 
     // Index order everywhere: Red, Green, Yellow, Blue.
-    // Corners as in the Model and the board diagram: Green top-left, Yellow top-right,
-    // Blue bottom-right, Red bottom-left.
     private static final String[] COLOURS = {"red", "green", "yellow", "blue"};
     private static final String[] COLOUR_NAMES = {"Red", "Green", "Yellow", "Blue"};
-    private static final int[][] CASTLE_ORIGINS = {{9, 0}, {0, 0}, {0, 9}, {9, 9}};
-    // Outermost centre-line square of each colour's Finish arm; first square of its Home Path
-    private static final int[][] ARROW_SQUARES = {{14, 7}, {7, 0}, {0, 7}, {7, 14}};
-    // Step from each Arrow Square towards the Finish, and the matching arrow rotation
-    private static final int[][] HOME_DIRECTIONS = {{-1, 0}, {0, 1}, {1, 0}, {0, -1}};
-    private static final double[] ARROW_ROTATIONS = {-90, 0, 90, 180};
-    // Two clockwise steps after each Arrow Square
-    private static final int[][] START_SQUARES = {{13, 6}, {6, 1}, {1, 8}, {8, 13}};
 
     // Pieces: large in the Castle yard (2x2 below the name), smaller on squares, smaller still
     // when several share a square
@@ -95,11 +122,16 @@ public class BoardView {
     private final Label turnColour = new Label();
     private final Label elapsedTime = new Label(formatElapsed(0));
     private final Label message = new Label();
-    private final Group starLayer = new Group();
     private final Pane pieceLayer = new Pane();
+    private final StackPane boardHolder = new StackPane();
+    // Per colour, from the squares shown: its Castle (null if the board has none) and that
+    // Castle's top-left square {row, column}
     private final Castle[] castles = new Castle[COLOURS.length];
+    private final int[][] castleOrigins = new int[COLOURS.length][];
+    private final String[] playerNames = new String[COLOURS.length];
     private final Map<String, PieceNode> pieces = new LinkedHashMap<>();
     private BiConsumer<String, Integer> onPieceChosen;
+    private double boardSize;
 
     public BoardView() {
         // Whose turn it is on the left, elapsed time on the right
@@ -139,7 +171,8 @@ public class BoardView {
 
         BorderPane group = new BorderPane();
         group.setTop(topBar);
-        group.setCenter(scaledToFit(buildBoard()));
+        boardHolder.setMinSize(0, 0);
+        group.setCenter(boardHolder);
         group.setRight(side);
 
         // The group is centred and no wider than the largest square board plus the side panel,
@@ -200,24 +233,57 @@ public class BoardView {
         if (colours.size() != names.size()) {
             throw new IllegalArgumentException("Each colour needs exactly one name");
         }
-        for (Castle castle : castles) {
-            castle.setName(null);
-        }
+        Arrays.fill(playerNames, null);
         for (int i = 0; i < colours.size(); i++) {
-            castles[colourIndex(colours.get(i))].setName(names.get(i));
+            playerNames[colourIndex(colours.get(i))] = names.get(i);
         }
+        applyPlayerNames();
         pieces.clear();
         pieceLayer.getChildren().clear();
     }
 
     /**
-     * Marks these squares as protected with a star; each entry is {row, column}. Replaces any
-     * previously shown stars.
+     * Draws the board from these squares, replacing any board shown before; player names and
+     * pieces already shown stay. Each square is drawn from its kind: plain path squares; a star
+     * on a protected square; "#" on a tinted Start; a tinted Arrow with an arrow pointing in its
+     * direction; solid Home Path squares; the Finish as one triangle per colour; a Castle for each
+     * colour's castle squares; a question mark in the level's colour with the level's letter
+     * (E, M or H); a gift on a surprise square.
+     *
+     * @param gridSize rows and columns of the board grid
+     * @throws IllegalArgumentException if a square is outside the grid or listed twice
      */
-    public void showProtectedSquares(List<int[]> squares) {
-        starLayer.getChildren().clear();
-        for (int[] square : squares) {
-            starLayer.getChildren().add(star(square[0], square[1]));
+    public void showBoard(int gridSize, List<BoardSquare> squares) {
+        if (gridSize < 1) {
+            throw new IllegalArgumentException("The board grid needs at least one square");
+        }
+        Map<String, BoardSquare> byPosition = new LinkedHashMap<>();
+        for (BoardSquare square : squares) {
+            if (square.row() < 0 || square.row() >= gridSize || square.column() < 0 || square.column() >= gridSize) {
+                throw new IllegalArgumentException("Square outside the " + gridSize + "×" + gridSize + " grid: "
+                        + square.row() + "," + square.column());
+            }
+            if (byPosition.put(square.row() + "," + square.column(), square) != null) {
+                throw new IllegalArgumentException("Square listed twice: " + square.row() + "," + square.column());
+            }
+        }
+        boardSize = gridSize * CELL;
+        Pane board = buildBoard(List.copyOf(byPosition.values()));
+        boardHolder.getChildren().setAll(new Group(board));
+        DoubleBinding scale = Bindings.createDoubleBinding(
+                () -> Math.max(0.05, Math.min(boardHolder.getWidth(), boardHolder.getHeight()) / boardSize),
+                boardHolder.widthProperty(), boardHolder.heightProperty());
+        board.scaleXProperty().bind(scale);
+        board.scaleYProperty().bind(scale);
+        applyPlayerNames();
+        layoutPieces();
+    }
+
+    private void applyPlayerNames() {
+        for (int i = 0; i < castles.length; i++) {
+            if (castles[i] != null) {
+                castles[i].setName(playerNames[i]);
+            }
         }
     }
 
@@ -319,7 +385,9 @@ public class BoardView {
         turnCircle.setVisible(true);
         turnColour.setText(COLOUR_NAMES[colourIndex]);
         for (int i = 0; i < castles.length; i++) {
-            castles[i].setHighlighted(i == colourIndex, castleTag);
+            if (castles[i] != null) {
+                castles[i].setHighlighted(i == colourIndex, castleTag);
+            }
         }
     }
 
@@ -343,8 +411,8 @@ public class BoardView {
         for (PieceNode node : pieces.values()) {
             int castle = castleAt(node.row, node.column);
             if (castle >= 0) {
-                int originRow = CASTLE_ORIGINS[castle][0];
-                int originColumn = CASTLE_ORIGINS[castle][1];
+                int originRow = castleOrigins[castle][0];
+                int originColumn = castleOrigins[castle][1];
                 boolean right = node.column - originColumn >= CASTLE_CELLS / 2;
                 boolean bottom = node.row - originRow >= CASTLE_CELLS / 2;
                 node.place(originColumn * CELL + CASTLE_SLOT_X[right ? 1 : 0],
@@ -373,10 +441,13 @@ public class BoardView {
     }
 
     /** Index of the Castle whose 6x6 region contains this square, or -1. */
-    private static int castleAt(int row, int column) {
-        for (int i = 0; i < CASTLE_ORIGINS.length; i++) {
-            int r = row - CASTLE_ORIGINS[i][0];
-            int c = column - CASTLE_ORIGINS[i][1];
+    private int castleAt(int row, int column) {
+        for (int i = 0; i < castleOrigins.length; i++) {
+            if (castleOrigins[i] == null) {
+                continue;
+            }
+            int r = row - castleOrigins[i][0];
+            int c = column - castleOrigins[i][1];
             if (r >= 0 && r < CASTLE_CELLS && c >= 0 && c < CASTLE_CELLS) {
                 return i;
             }
@@ -403,42 +474,52 @@ public class BoardView {
     }
 
     /**
-     * Wraps the fixed-size board so it is scaled uniformly to the largest square that fits,
-     * keeping it square and fully visible at any window size.
+     * Builds the board from its squares, in layers: path squares, Arrows and Home Paths, Castles,
+     * the Finish, Starts, then the marks of protected, question and surprise squares. The pieces
+     * go on top.
      */
-    private static StackPane scaledToFit(Pane board) {
-        StackPane holder = new StackPane(new Group(board));
-        holder.setMinSize(0, 0);
-        DoubleBinding scale = Bindings.createDoubleBinding(
-                () -> Math.max(0.05, Math.min(holder.getWidth(), holder.getHeight()) / BOARD_SIZE),
-                holder.widthProperty(), holder.heightProperty());
-        board.scaleXProperty().bind(scale);
-        board.scaleYProperty().bind(scale);
-        return holder;
-    }
-
-    private Pane buildBoard() {
+    private Pane buildBoard(List<BoardSquare> squares) {
         Pane board = new Pane();
-        board.setMinSize(BOARD_SIZE, BOARD_SIZE);
-        board.setPrefSize(BOARD_SIZE, BOARD_SIZE);
-        board.setMaxSize(BOARD_SIZE, BOARD_SIZE);
+        board.setMinSize(boardSize, boardSize);
+        board.setPrefSize(boardSize, boardSize);
+        board.setMaxSize(boardSize, boardSize);
         board.setAccessibleText("Ludo board");
 
-        for (int[] square : commonPath()) {
-            board.getChildren().add(square(square[0], square[1], "board-plain", "board-path"));
+        for (BoardSquare square : squares) {
+            if (PATH_KINDS.contains(square.kind())) {
+                board.getChildren().add(square(square.row(), square.column(), "board-plain", "board-path"));
+            }
         }
-        for (int colour = 0; colour < COLOURS.length; colour++) {
-            addHomePath(board, colour);
-            castles[colour] = new Castle(colour);
-            board.getChildren().add(castles[colour].node);
+        for (BoardSquare square : squares) {
+            int colour = square.colour() == null ? -1 : colourIndex(square.colour());
+            if (square.kind().equals("arrow")) {
+                board.getChildren().add(square(square.row(), square.column(),
+                        "tint-" + COLOURS[colour], "board-home", "board-arrow-square"));
+                board.getChildren().add(arrow(square.row(), square.column(), colour, square.direction()));
+            } else if (square.kind().equals("home")) {
+                board.getChildren().add(square(square.row(), square.column(), "player-" + COLOURS[colour], "board-home"));
+            }
         }
-        addFinish(board);
-        for (int colour = 0; colour < COLOURS.length; colour++) {
-            addStartSquare(board, colour);
+        addCastles(board, squares);
+        addFinish(board, squares);
+        for (BoardSquare square : squares) {
+            if (square.kind().equals("start")) {
+                addStartSquare(board, square.row(), square.column(), colourIndex(square.colour()));
+            }
         }
-        board.getChildren().add(starLayer);
+        Group marks = new Group();
+        marks.setMouseTransparent(true);
+        for (BoardSquare square : squares) {
+            switch (square.kind()) {
+                case "protected" -> marks.getChildren().add(star(square.row(), square.column()));
+                case "question" -> marks.getChildren().add(questionMark(square.row(), square.column(), square.level()));
+                case "surprise" -> marks.getChildren().add(gift(square.row(), square.column()));
+                default -> { }
+            }
+        }
+        board.getChildren().add(marks);
 
-        Rectangle border = new Rectangle(BOARD_SIZE, BOARD_SIZE);
+        Rectangle border = new Rectangle(boardSize, boardSize);
         border.getStyleClass().add("board-border");
         border.setMouseTransparent(true);
         pieceLayer.setPickOnBounds(false);
@@ -446,61 +527,29 @@ public class BoardView {
         return board;
     }
 
-    /**
-     * The 52 common-path squares in clockwise order, starting at the outer end of the top row of
-     * the left arm.
-     */
-    private static List<int[]> commonPath() {
-        List<int[]> path = new ArrayList<>();
-        for (int col = 0; col <= 5; col++) {
-            path.add(new int[]{6, col});
+    /** One Castle per colour, covering the 6x6 region whose top-left is that colour's first castle square. */
+    private void addCastles(Pane board, List<BoardSquare> squares) {
+        Arrays.fill(castles, null);
+        for (int colour = 0; colour < COLOURS.length; colour++) {
+            castleOrigins[colour] = null;
         }
-        for (int row = 5; row >= 0; row--) {
-            path.add(new int[]{row, 6});
+        for (BoardSquare square : squares) {
+            if (square.kind().equals("castle")) {
+                int colour = colourIndex(square.colour());
+                int[] origin = castleOrigins[colour];
+                castleOrigins[colour] = origin == null ? new int[]{square.row(), square.column()}
+                        : new int[]{Math.min(origin[0], square.row()), Math.min(origin[1], square.column())};
+            }
         }
-        path.add(new int[]{0, 7});
-        for (int row = 0; row <= 5; row++) {
-            path.add(new int[]{row, 8});
-        }
-        for (int col = 9; col <= 14; col++) {
-            path.add(new int[]{6, col});
-        }
-        path.add(new int[]{7, 14});
-        for (int col = 14; col >= 9; col--) {
-            path.add(new int[]{8, col});
-        }
-        for (int row = 9; row <= 14; row++) {
-            path.add(new int[]{row, 8});
-        }
-        path.add(new int[]{14, 7});
-        for (int row = 14; row >= 9; row--) {
-            path.add(new int[]{row, 6});
-        }
-        for (int col = 5; col >= 0; col--) {
-            path.add(new int[]{8, col});
-        }
-        path.add(new int[]{7, 0});
-        return path;
-    }
-
-    /**
-     * Home Path: the tinted Arrow Square with its arrow, then five solid squares towards the Finish.
-     */
-    private void addHomePath(Pane board, int colour) {
-        int row = ARROW_SQUARES[colour][0];
-        int col = ARROW_SQUARES[colour][1];
-        board.getChildren().add(square(row, col, "tint-" + COLOURS[colour], "board-home", "board-arrow-square"));
-        board.getChildren().add(arrow(row, col, colour));
-        for (int step = 1; step < HOME_PATH_LENGTH; step++) {
-            int r = row + step * HOME_DIRECTIONS[colour][0];
-            int c = col + step * HOME_DIRECTIONS[colour][1];
-            board.getChildren().add(square(r, c, "player-" + COLOURS[colour], "board-home"));
+        for (int colour = 0; colour < COLOURS.length; colour++) {
+            if (castleOrigins[colour] != null) {
+                castles[colour] = new Castle(colour, castleOrigins[colour][0], castleOrigins[colour][1]);
+                board.getChildren().add(castles[colour].node);
+            }
         }
     }
 
-    private void addStartSquare(Pane board, int colour) {
-        int row = START_SQUARES[colour][0];
-        int col = START_SQUARES[colour][1];
+    private void addStartSquare(Pane board, int row, int col, int colour) {
         Rectangle tint = square(row, col, "tint-" + COLOURS[colour], "board-start");
         Label mark = text("#", "board-start-mark");
         mark.setAlignment(Pos.CENTER);
@@ -510,21 +559,43 @@ public class BoardView {
     }
 
     /**
-     * Central Finish: four triangles, each in the colour of the Home Path that ends there.
+     * The Finish: over the block that holds the finish squares, one triangle per colour, from the
+     * side where that colour's finish square lies to the centre.
      */
-    private void addFinish(Pane board) {
-        double low = 6 * CELL;
-        double high = 9 * CELL;
-        double mid = BOARD_SIZE / 2;
-        double[][] triangles = {
-                {low, high, high, high, mid, mid},
-                {low, low, low, high, mid, mid},
-                {low, low, high, low, mid, mid},
-                {high, low, high, high, mid, mid}};
+    private static void addFinish(Pane board, List<BoardSquare> squares) {
+        List<BoardSquare> finish = squares.stream().filter(square -> square.kind().equals("finish")).toList();
+        if (finish.isEmpty()) {
+            return;
+        }
+        int top = finish.stream().mapToInt(BoardSquare::row).min().orElseThrow();
+        int bottom = finish.stream().mapToInt(BoardSquare::row).max().orElseThrow();
+        int left = finish.stream().mapToInt(BoardSquare::column).min().orElseThrow();
+        int right = finish.stream().mapToInt(BoardSquare::column).max().orElseThrow();
+        double x1 = left * CELL;
+        double x2 = (right + 1) * CELL;
+        double y1 = top * CELL;
+        double y2 = (bottom + 1) * CELL;
+        double midX = (x1 + x2) / 2;
+        double midY = (y1 + y2) / 2;
         for (int colour = 0; colour < COLOURS.length; colour++) {
-            Polygon triangle = new Polygon(triangles[colour]);
-            triangle.getStyleClass().addAll("board-finish", "player-" + COLOURS[colour]);
-            board.getChildren().add(triangle);
+            for (BoardSquare square : finish) {
+                if (colourIndex(square.colour()) != colour) {
+                    continue;
+                }
+                double[] points;
+                if (square.row() == bottom) {
+                    points = new double[]{x1, y2, x2, y2, midX, midY};
+                } else if (square.column() == left) {
+                    points = new double[]{x1, y1, x1, y2, midX, midY};
+                } else if (square.row() == top) {
+                    points = new double[]{x1, y1, x2, y1, midX, midY};
+                } else {
+                    points = new double[]{x2, y1, x2, y2, midX, midY};
+                }
+                Polygon triangle = new Polygon(points);
+                triangle.getStyleClass().addAll("board-finish", "player-" + COLOURS[colour]);
+                board.getChildren().add(triangle);
+            }
         }
     }
 
@@ -536,15 +607,54 @@ public class BoardView {
     }
 
     /**
-     * Arrow centred in the square, pointing along the Home Path towards the Finish.
+     * Arrow centred in the square, in its colour, pointing the way that colour's pieces turn.
      */
-    private static Polygon arrow(int row, int col, int colour) {
+    private static Polygon arrow(int row, int col, int colour, String direction) {
         Polygon arrow = new Polygon(6, 13, 20, 13, 20, 6, 34, 20, 20, 34, 20, 27, 6, 27);
         arrow.getStyleClass().addAll("board-arrow", "player-" + COLOURS[colour]);
         arrow.setLayoutX(col * CELL);
         arrow.setLayoutY(row * CELL);
-        arrow.setRotate(ARROW_ROTATIONS[colour]);
+        arrow.setRotate(DIRECTIONS.get(direction));
         return arrow;
+    }
+
+    /**
+     * A question mark in the level's colour, with the level's letter (E, M or H) in the corner,
+     * so the level never depends on colour alone.
+     */
+    private static StackPane questionMark(int row, int col, String level) {
+        Text mark = new Text("?");
+        mark.getStyleClass().addAll("board-question", "board-question-" + level.toLowerCase(Locale.ROOT));
+        Text letter = new Text(level.substring(0, 1));
+        letter.getStyleClass().add("board-question-level");
+        StackPane cell = new StackPane(mark, letter);
+        StackPane.setAlignment(mark, Pos.CENTER_LEFT);
+        StackPane.setMargin(mark, new Insets(0, 0, 0, 7));
+        StackPane.setAlignment(letter, Pos.BOTTOM_RIGHT);
+        StackPane.setMargin(letter, new Insets(0, 3, 2, 0));
+        cell.setPrefSize(CELL, CELL);
+        cell.resizeRelocate(col * CELL, row * CELL, CELL, CELL);
+        cell.setAccessibleText(level + " question square");
+        return cell;
+    }
+
+    /** A gift: a box with a ribbon down the middle and a bow on top. */
+    private static Group gift(int row, int col) {
+        double x = col * CELL;
+        double y = row * CELL;
+        Rectangle box = new Rectangle(x + 10, y + 18, 20, 14);
+        Rectangle lid = new Rectangle(x + 8, y + 13, 24, 6);
+        box.getStyleClass().add("board-gift");
+        lid.getStyleClass().add("board-gift");
+        Rectangle ribbon = new Rectangle(x + 18.5, y + 13, 3, 19);
+        ribbon.getStyleClass().add("board-gift-ribbon");
+        Circle bowLeft = new Circle(x + 16, y + 9.5, 3.5);
+        Circle bowRight = new Circle(x + 24, y + 9.5, 3.5);
+        bowLeft.getStyleClass().add("board-gift");
+        bowRight.getStyleClass().add("board-gift");
+        Group gift = new Group(bowLeft, bowRight, box, lid, ribbon);
+        gift.setAccessibleText("Surprise square");
+        return gift;
     }
 
     private static Polygon star(int row, int col) {
@@ -580,10 +690,10 @@ public class BoardView {
         private final Rectangle outline;
         private String playerName;
 
-        private Castle(int colourIndex) {
+        private Castle(int colourIndex, int originRow, int originColumn) {
             this.colourIndex = colourIndex;
-            double x = CASTLE_ORIGINS[colourIndex][1] * CELL;
-            double y = CASTLE_ORIGINS[colourIndex][0] * CELL;
+            double x = originColumn * CELL;
+            double y = originRow * CELL;
             double size = CASTLE_CELLS * CELL;
             double yardSize = size - 2 * CASTLE_INSET;
 

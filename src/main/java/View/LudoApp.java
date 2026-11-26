@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.ObjIntConsumer;
 
+import Controller.BoardSquares;
 import Controller.GameController;
 import Controller.HistoryController;
 import Controller.MainMenuController;
@@ -58,8 +59,8 @@ public class LudoApp extends Application {
     }
 
     /**
-     * Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-dice, --dev-question,
-     * --dev-surprise, --dev-results,
+     * Development only: --dev-setup, --dev-setup-errors, --dev-board, --dev-medium-board, --dev-dice,
+     * --dev-question, --dev-surprise, --dev-results,
      * --dev-results-save-error, --dev-history, --dev-history-empty or --dev-history-error
      * opens that screen directly instead of the Main Menu.
      * Returns {@code false} for a normal launch.
@@ -119,6 +120,11 @@ public class LudoApp extends Application {
             game.setOnMainMenu(mainMenu::show);
             showScreen.accept(board.getRoot());
             Platform.runLater(() -> devSurprisePreview(board));
+        } else if (launchArgs.contains("--dev-medium-board")) {
+            // The real Medium board from the Model, special squares included; no game is played
+            BoardView board = new BoardView();
+            devMediumBoardPreview(board, sampleNames, sampleColours);
+            showScreen.accept(board.getRoot());
         } else if (launchArgs.contains("--dev-dice")) {
             showScreen.accept(devDicePreview());
         } else if (launchArgs.contains("--dev-setup")) {
@@ -273,6 +279,18 @@ public class LudoApp extends Application {
             }
         });
         open.run();
+    }
+
+    /**
+     * Development only: a real Medium board exactly as the Model builds it, special squares
+     * included, with the sample players' names in their Castles. No game is played; Roll is
+     * unavailable.
+     */
+    private static void devMediumBoardPreview(BoardView board, List<String> names, List<String> colours) {
+        BoardSquares.medium().showOn(board);
+        board.showPlayers(colours, names);
+        board.getDiceView().setRollEnabled(false);
+        board.showMessage("Medium board preview: the board as the Model builds it.");
     }
 
     public static void main(String[] args) {
