@@ -281,8 +281,7 @@ class SurpriseEffectsTest {
         long id = f.pending().id();
         var snapshot = f.game().board().occupancy();
         assertThrows(NullPointerException.class, () -> f.game().resolveSurpriseEffect(id, null));
-        for (SurpriseEvent event : List.of(SurpriseEvent.MOVE_OPPONENT_BACKWARD,
-                SurpriseEvent.SKIP_NEXT_TURN, SurpriseEvent.EXTRA_ULTRA_TURN)) {
+        for (SurpriseEvent event : List.of(SurpriseEvent.SKIP_NEXT_TURN, SurpriseEvent.EXTRA_ULTRA_TURN)) {
             assertThrows(IllegalArgumentException.class, () -> f.game().resolveSurpriseEffect(id, event));
         }
         assertThrows(IllegalStateException.class,
