@@ -20,9 +20,11 @@ public class EasyStrategy implements DiceStrategy {
     }
 
     /**
-     * Creates an easy-mode dice strategy using the specified standard die for testing.
+     * Creates an easy-mode dice strategy using the specified die for standard rolls
+     * and distance rolls.
      *
-     * @param die the standard die used to produce roll values for this strategy
+     * @param die the die to use for rolling values
+     * @throws NullPointerException if {@code die} is {@code null}
      */
     public EasyStrategy(Die die) {
         Objects.requireNonNull(die, "die");
