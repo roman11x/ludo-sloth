@@ -8,7 +8,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Random;
+import java.util.function.Consumer;
 
 /**
  * An initialized Easy game: board occupancy, participants, fixed routes and turns.
@@ -30,6 +32,7 @@ public final class Game {
     private final LongSupplier nanoTime;
     private final long startedAtNanos;
     private Duration finalDuration;
+    private final List<GameListener> listeners = new ArrayList<>();
 
     public Game(List<Player> players) {
         this(players, Difficulty.EASY);
@@ -129,15 +132,24 @@ public final class Game {
         PlayerColor player = turnManager.currentPlayer().color();
         // Validate and roll before changing pending moves: a rejected second
         // roll must leave the original choices intact.
+        Player roller = turnManager.currentPlayer();
         TurnRoll result = turnManager.roll(player);
         legalMoves = List.of();
-        if (result.cancelled()) return result;
-
-        List<MoveCandidate> candidates = moveGenerator.generate(board, player, result.value());
-        legalMoves = moveRules.legalMoves(board, candidates);
-        if (legalMoves.isEmpty()) {
-            turnManager.completeTurn(player);
+        if (!result.cancelled()) {
+            List<MoveCandidate> candidates = moveGenerator.generate(board, player, result.value());
+            legalMoves = moveRules.legalMoves(board, candidates);
+            if (legalMoves.isEmpty()) {
+                turnManager.completeTurn(player);
+            }
         }
+
+        List<Consumer<GameListener>> events = new ArrayList<>();
+        events.add(listener -> listener.rolled(roller, result));
+        if (turnManager.phase() == TurnPhase.WAITING_FOR_ROLL) {
+            Player next = turnManager.currentPlayer();
+            events.add(listener -> listener.turnPassed(next));
+        }
+        notifyListeners(events);
         return result;
     }
 
@@ -160,11 +172,14 @@ public final class Game {
         if (!moveRules.isLegalMove(board, piece, move.source(), move.path())) {
             throw new IllegalStateException("The stored move no longer matches the board");
         }
-        applyMove(move);
+        List<Consumer<GameListener>> events = new ArrayList<>();
+        applyMove(activePlayer, move, events);
         legalMoves = List.of();
         boolean playerFinished = hasFinished(activePlayer);
         if (playerFinished && !ranking.contains(activePlayer)) {
             ranking.add(activePlayer);
+            int place = ranking.size();
+            events.add(listener -> listener.playerFinished(activePlayer, place));
         }
         turnManager.completeTurn(player, playerFinished);
         if (isFinished()) {
@@ -174,12 +189,72 @@ public final class Game {
             Player last = players.stream().filter(participant -> !ranking.contains(participant))
                     .findFirst().orElseThrow();
             ranking.add(last);
+            List<Player> finalRanking = ranking();
+            events.add(listener -> listener.gameOver(finalRanking));
+        } else {
+            Player next = turnManager.currentPlayer();
+            events.add(listener -> listener.turnPassed(next));
         }
+        notifyListeners(events);
         return move;
     }
 
+    /**
+     * Executes a backward movement requested by a question/surprise effect.
+     * The piece may belong to any participant, including an opponent. The caller
+     * selects eligible pieces and resolves any resulting square effects separately.
+     * Reuses the normal movement/capture implementation and notifies listeners only
+     * after the board and pending roll choices have been updated. Does not roll,
+     * complete a turn, alter six counts or assign ranks. Returns empty without
+     * notifications when no movement is possible.
+     */
+    public Optional<MoveCandidate> moveBackward(Piece piece, int steps) {
+        Objects.requireNonNull(piece, "piece");
+        if (isFinished()) throw new IllegalStateException("The game is over");
+        Player owner = players.stream().filter(player -> player.pieces().contains(piece))
+                .findFirst().orElseThrow(() -> new IllegalArgumentException(
+                        "Piece does not belong to a participant"));
+        Optional<MoveCandidate> move = moveGenerator.generateBackward(board, piece, steps)
+                .flatMap(candidate -> moveRules.legalEventMove(board, candidate));
+        if (move.isEmpty()) return Optional.empty();
+
+        List<Consumer<GameListener>> events = new ArrayList<>();
+        applyMove(owner, move.get(), events);
+        if (turnManager.phase() == TurnPhase.WAITING_FOR_MOVE) {
+            // An effect may move a source, remove a block or occupy a destination.
+            // Refresh choices for the SAME roll, without resolving or passing the turn.
+            legalMoves = moveRules.legalMoves(board, moveGenerator.generate(board,
+                    turnManager.currentPlayer().color(), turnManager.pendingRollValue()));
+        }
+        notifyListeners(events);
+        return move;
+    }
+
+    /** Registers {@code listener} to be notified after each accepted change; adding it twice has no effect. */
+    public void addListener(GameListener listener) {
+        Objects.requireNonNull(listener, "listener");
+        if (!listeners.contains(listener)) {
+            listeners.add(listener);
+        }
+    }
+
+    /** Stops notifying {@code listener}; does nothing if it is not registered. */
+    public void removeListener(GameListener listener) {
+        listeners.remove(listener);
+    }
+
+    /** Delivers each event to every listener in registration order, against a snapshot of the listeners. */
+    private void notifyListeners(List<Consumer<GameListener>> events) {
+        List<GameListener> recipients = List.copyOf(listeners);
+        for (Consumer<GameListener> event : events) {
+            for (GameListener listener : recipients) {
+                event.accept(listener);
+            }
+        }
+    }
+
     /** FR-041/043: capture a lone opponent only on an unprotected destination. */
-    private void applyMove(MoveCandidate move) {
+    private void applyMove(Player mover, MoveCandidate move, List<Consumer<GameListener>> events) {
         Square destination = board.squareAt(move.destination());
         List<Piece> opponents = destination.pieces().stream()
                 .filter(piece -> piece.color() != move.piece().color()).toList();
@@ -198,6 +273,14 @@ public final class Game {
         } catch (RuntimeException failure) {
             if (captured != null) board.movePiece(captured, castleSlot, move.destination());
             throw failure;
+        }
+        events.add(listener -> listener.pieceMoved(mover, move));
+        if (captured != null) {
+            Piece capturedPiece = captured;
+            Position capturedSlot = castleSlot;
+            Player owner = players.stream().filter(participant -> participant.color() == capturedPiece.color())
+                    .findFirst().orElseThrow();
+            events.add(listener -> listener.pieceCaptured(owner, capturedPiece, capturedSlot));
         }
     }
 

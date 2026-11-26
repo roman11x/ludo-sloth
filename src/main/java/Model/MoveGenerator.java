@@ -5,12 +5,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
- * Generates forward Easy candidates from fixed routes and board occupancy.
+ * Generates forward roll candidates and backward effect candidates from fixed routes and occupancy.
  * Does not move pieces or filter captures, opposing blocks or protected squares.
  * Castle exit is one move to Start on a Standard 6; overshoots and completed
- * pieces have no candidate. Other difficulty/dice configurations are not handled.
+ * pieces have no candidate. Forward rolls still accept only a Standard result of 1-6.
  */
 public final class MoveGenerator {
     private final Map<PlayerColor, PlayerRoute> routes;
@@ -66,4 +67,47 @@ public final class MoveGenerator {
         candidates.sort(Comparator.comparingInt(candidate -> candidate.piece().number()));
         return List.copyOf(candidates);
     }
+
+    /**
+     * Proposes a backward effect move for one placed piece, in reverse route order.
+     * The path excludes the source, includes the destination and stops at Start.
+     * Zero distance, Castle, Start and completed pieces produce no candidate.
+     * Does not change occupancy or filter blocks, capture or special-square effects.
+     *
+     * @throws IllegalArgumentException if steps is negative or the piece's route is missing
+     * @throws IllegalStateException if the piece is unplaced or outside its own route/Castle
+     */
+    public Optional<MoveCandidate> generateBackward(Board board, Piece piece, int steps) {
+        Objects.requireNonNull(board, "board");
+        Objects.requireNonNull(piece, "piece");
+        if (steps < 0) throw new IllegalArgumentException("Backward steps must not be negative");
+        PlayerRoute route = routes.get(piece.color());
+        if (route == null) throw new IllegalArgumentException("Missing route for " + piece.color());
+
+        Position source = board.occupancy().entrySet().stream()
+                .filter(entry -> entry.getValue().contains(piece))
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Piece is not on this board: " + piece));
+        Square sourceSquare = board.squareAt(source);
+        if (sourceSquare.type() == SquareType.CASTLE) {
+            if (sourceSquare.associatedColor() != SquareColor.fromPlayerColor(piece.color())) {
+                throw new IllegalStateException("Piece is in another color's Castle");
+            }
+            return Optional.empty();
+        }
+        int sourceIndex = route.positions().indexOf(source);
+        if (sourceIndex < 0) throw new IllegalStateException("Piece is outside its route: " + piece);
+        if (steps == 0 || sourceIndex == 0 || sourceIndex == route.size() - 1) {
+            return Optional.empty();
+        }
+
+        int destinationIndex = Math.max(0, sourceIndex - steps);
+        List<Position> path = new ArrayList<>();
+        for (int index = sourceIndex - 1; index >= destinationIndex; index--) {
+            path.add(route.positions().get(index));
+        }
+        return Optional.of(new MoveCandidate(piece, source, path));
+    }
+
 }

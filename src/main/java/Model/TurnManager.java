@@ -59,6 +59,12 @@ public final class TurnManager {
         return phase;
     }
 
+    /** The unconsumed Standard result; reading it never changes turn state. */
+    int pendingRollValue() {
+        requirePhase(TurnPhase.WAITING_FOR_MOVE);
+        return lastRoll;
+    }
+
     public boolean isActive(PlayerColor player) {
         Objects.requireNonNull(player, "player");
         return phase != TurnPhase.GAME_OVER && currentPlayer().color() == player;
