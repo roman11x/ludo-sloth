@@ -77,7 +77,10 @@ public final class BoardSquares {
         return new BoardSquares(minRow, minColumn, size, values);
     }
 
-    /** The Medium board and routes from the Model, as they are before special squares are placed. */
+    /**
+     * A new Medium board and its routes from the Model, with the Model's randomly placed special
+     * squares: 8 protected, 6 question (2 per level) and 2 surprise.
+     */
     public static BoardSquares medium() {
         return of(Board.createMedium(), PlayerRouteFactory.createMedium());
     }

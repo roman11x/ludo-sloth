@@ -66,8 +66,10 @@ class BoardSquaresTest {
     void mediumBoardIsSeventeenBySeventeenWithTheOuterPathStartsAtTheCornersAndTwoArrowsPerColour() {
         BoardSquares medium = BoardSquares.medium();
         assertEquals(17, medium.gridSize());
-        assertEquals(Map.of("path", 104L, "start", 4L, "arrow", 8L,
-                "home", 20L, "finish", 4L, "castle", 144L), countByKind(medium));
+        assertEquals(Map.of("path", 88L, "protected", 8L, "question", 6L, "surprise", 2L, "start", 4L,
+                "arrow", 8L, "home", 20L, "finish", 4L, "castle", 144L), countByKind(medium));
+        assertEquals(Map.of("Easy", 2L, "Medium", 2L, "Hard", 2L), ofKind(medium, "question").stream()
+                .collect(Collectors.groupingBy(BoardSquare::level, Collectors.counting())));
         assertEquals(new BoardSquare(0, 0, "start", "Green", null, null), at(medium, 0, 0));
         assertEquals(new BoardSquare(0, 16, "start", "Yellow", null, null), at(medium, 0, 16));
         assertEquals(new BoardSquare(16, 16, "start", "Blue", null, null), at(medium, 16, 16));
@@ -84,10 +86,11 @@ class BoardSquaresTest {
     }
 
     @Test
-    void formerEasyStartsAreOrdinaryPathSquaresOnTheMediumBoard() {
+    void formerEasyStartsAreNoLongerStartsOnTheMediumBoard() {
         BoardSquares medium = BoardSquares.medium();
+        // A former Easy Start may now hold a random special square, so only its kind "start" is ruled out
         for (int[] former : new int[][]{{7, 2}, {2, 9}, {9, 14}, {14, 7}}) {
-            assertEquals("path", at(medium, former[0], former[1]).kind());
+            assertNotEquals("start", at(medium, former[0], former[1]).kind());
         }
     }
 

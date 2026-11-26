@@ -1,7 +1,6 @@
 package View;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -122,7 +121,7 @@ public class LudoApp extends Application {
             showScreen.accept(board.getRoot());
             Platform.runLater(() -> devSurprisePreview(board));
         } else if (launchArgs.contains("--dev-medium-board")) {
-            // The real Medium board from the Model, with sample special squares; no game is played
+            // The real Medium board from the Model, special squares included; no game is played
             BoardView board = new BoardView();
             devMediumBoardPreview(board, sampleNames, sampleColours);
             showScreen.accept(board.getRoot());
@@ -283,34 +282,15 @@ public class LudoApp extends Application {
     }
 
     /**
-     * Development only: the Medium board as the Model builds it today, plus sample special squares
-     * (8 stars, 6 questions with 2 per level, 2 surprises) spread over its path squares, since the
-     * Model does not place them on Medium yet. No game is played; Roll is unavailable.
+     * Development only: a real Medium board exactly as the Model builds it, special squares
+     * included, with the sample players' names in their Castles. No game is played; Roll is
+     * unavailable.
      */
     private static void devMediumBoardPreview(BoardView board, List<String> names, List<String> colours) {
-        BoardSquares medium = BoardSquares.medium();
-        List<BoardView.BoardSquare> squares = new ArrayList<>(medium.squares());
-        List<Integer> path = new ArrayList<>();
-        for (int i = 0; i < squares.size(); i++) {
-            if (squares.get(i).kind().equals("path")) {
-                path.add(i);
-            }
-        }
-        String[][] samples = {
-                {"protected", null}, {"question", "Easy"}, {"protected", null}, {"surprise", null},
-                {"protected", null}, {"question", "Medium"}, {"protected", null}, {"question", "Hard"},
-                {"protected", null}, {"question", "Easy"}, {"protected", null}, {"surprise", null},
-                {"protected", null}, {"question", "Medium"}, {"protected", null}, {"question", "Hard"}};
-        for (int i = 0; i < samples.length; i++) {
-            int index = path.get(i * path.size() / samples.length);
-            BoardView.BoardSquare square = squares.get(index);
-            squares.set(index, new BoardView.BoardSquare(square.row(), square.column(),
-                    samples[i][0], null, samples[i][1], null));
-        }
-        board.showBoard(medium.gridSize(), squares);
+        BoardSquares.medium().showOn(board);
         board.showPlayers(colours, names);
         board.getDiceView().setRollEnabled(false);
-        board.showMessage("Medium board preview with sample special squares.");
+        board.showMessage("Medium board preview: the board as the Model builds it.");
     }
 
     public static void main(String[] args) {
