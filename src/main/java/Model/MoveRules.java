@@ -37,6 +37,19 @@ public class MoveRules {
     }
 
     /**
+     * Evaluates one generator-produced move for a piece selected by an event.
+     * Uses the same terrain, occupancy and blocking checks as dice moves, but
+     * permits a prefix before a block without comparing other pieces (FR-049).
+     * Returns empty if no step is legal; never changes the board or resolves captures.
+     * Route order, distance and event-specific piece eligibility belong to the caller.
+     */
+    public Optional<MoveCandidate> legalEventMove(Board board, MoveCandidate candidate) {
+        Objects.requireNonNull(board, "board");
+        Objects.requireNonNull(candidate, "candidate");
+        return evaluateMove(board, candidate);
+    }
+
+    /**
      * Revalidates an already selected path with the SAME rules as legalMoves.
      * No shortening is accepted here. The caller must select from the complete
      * legalMoves result to enforce turn-wide preference for full moves.
@@ -60,7 +73,7 @@ public class MoveRules {
         }
     }
 
-    /** One evaluation path for generation filtering and execution revalidation. */
+    /** One evaluation path for dice filtering, event moves and execution revalidation. */
     private Optional<MoveCandidate> evaluateMove(Board board, MoveCandidate candidate) {
         if (!validSource(board, candidate)) return Optional.empty();
         Optional<List<Position>> scanned = pathBeforeFirstBlock(board, candidate);
