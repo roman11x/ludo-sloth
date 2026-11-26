@@ -220,13 +220,8 @@ public final class Game {
     /** Shared completion path, reached only after all landing effects have resolved. */
     private void finishTurn(List<Consumer<GameListener>> events) {
         Player activePlayer = turnManager.currentPlayer();
-        boolean playerFinished = hasFinished(activePlayer);
-        if (playerFinished && !ranking.contains(activePlayer)) {
-            ranking.add(activePlayer);
-            int place = ranking.size();
-            events.add(listener -> listener.playerFinished(activePlayer, place));
-        }
-        turnManager.completeTurn(activePlayer.color(), playerFinished);
+        recordPlayerCompletion(activePlayer, events);
+        turnManager.completeTurn(activePlayer.color(), hasFinished(activePlayer));
         if (isFinished()) {
             finalDuration = elapsedDuration();
             // The remaining participant is last, without moving their pieces
@@ -240,6 +235,55 @@ public final class Game {
             Player next = turnManager.currentPlayer();
             events.add(listener -> listener.turnPassed(next));
         }
+    }
+
+    /** A chained effect may finish an opponent's piece while the original player owns the turn. */
+    private void recordPlayerCompletion(Player player, List<Consumer<GameListener>> events) {
+        if (hasFinished(player) && !ranking.contains(player)) {
+            turnManager.recordFinishedPlayer(player.color());
+            ranking.add(player);
+            int place = ranking.size();
+            events.add(listener -> listener.playerFinished(player, place));
+        }
+    }
+
+    /**
+     * Executes one already-selected S02 event on the pending Surprise's landing piece.
+     * Selection belongs to SurpriseEventSelector; the other three events have separate handlers.
+     * Direct transfers have a destination-only path (not the intervening route), while back-three
+     * uses the existing reverse-route rules, captures and chained-effect continuation.
+     */
+    public Optional<MoveCandidate> resolveSurpriseEffect(long requestId, SurpriseEvent event) {
+        PendingSquareEffect request = requirePendingEffect(requestId);
+        Objects.requireNonNull(event, "event");
+        if (request.square().type() != SquareType.SURPRISE) {
+            throw new IllegalArgumentException("A Surprise event requires a pending Surprise square");
+        }
+        return switch (event) {
+            case MOVE_BACK_THREE -> resolveSquareEffect(requestId, -3);
+            case MOVE_TO_FINISH -> transferSurprisePiece(request, routes.get(request.piece().color()).finish());
+            case RETURN_TO_CASTLE -> transferSurprisePiece(request, surpriseCastleSlot(request.piece()));
+            case MOVE_OPPONENT_BACKWARD, SKIP_NEXT_TURN, EXTRA_ULTRA_TURN ->
+                    throw new IllegalArgumentException("This event requires its own handler: " + event);
+        };
+    }
+
+    private Position surpriseCastleSlot(Piece piece) {
+        Position originalSlot = activeCastleSlots(piece.color()).get(piece.number() - 1);
+        // Captures use any free Castle slot, so the original numbered slot may already be occupied.
+        return board.piecesAt(originalSlot).isEmpty() ? originalSlot : emptyCastleSlot(piece.color());
+    }
+
+    private Optional<MoveCandidate> transferSurprisePiece(PendingSquareEffect request, Position destination) {
+        requirePendingLanding(request);
+        MoveCandidate transfer = new MoveCandidate(request.piece(), request.square().position(), List.of(destination));
+        List<Consumer<GameListener>> events = new ArrayList<>();
+        // FR-065: a direct Finish transfer ignores intervening blocks and remaining distance.
+        // Both destinations belong to the piece; this is relocation, never a capture en route.
+        board.movePiece(transfer.piece(), transfer.source(), transfer.destination());
+        Player owner = pieceOwner(transfer.piece());
+        events.add(listener -> listener.pieceMoved(owner, transfer));
+        return finishResolvedEffect(request.piece(), Optional.of(transfer), events);
     }
 
     /** The pending request remains stable until accepted; no timeout is imposed. */
@@ -271,21 +315,31 @@ public final class Game {
             throw new IllegalArgumentException("Only the landing piece can move forward for this effect");
         }
         Player owner = pieceOwner(affectedPiece);
-        if (!board.piecesAt(request.square().position()).contains(request.piece())) {
-            throw new IllegalStateException("The pending landing no longer matches the board");
-        }
+        requirePendingLanding(request);
         Optional<MoveCandidate> proposed = steps < 0
                 ? moveGenerator.generateBackward(board, affectedPiece, -steps)
                 : moveGenerator.generateForwardEffect(board, affectedPiece, steps);
         Optional<MoveCandidate> approved = proposed.flatMap(candidate -> moveRules.legalEventMove(board, candidate));
         List<Consumer<GameListener>> events = new ArrayList<>();
         approved.ifPresent(move -> applyMove(owner, move, events));
+        return finishResolvedEffect(affectedPiece, approved, events);
+    }
+
+    private Optional<MoveCandidate> finishResolvedEffect(Piece affectedPiece, Optional<MoveCandidate> move,
+                                                        List<Consumer<GameListener>> events) {
         pendingSquareEffect = null;
         turnManager.resumeAfterEffect();
-        if (approved.isPresent()) continueAfterLanding(affectedPiece, events);
+        recordPlayerCompletion(pieceOwner(affectedPiece), events);
+        if (move.isPresent()) continueAfterLanding(affectedPiece, events);
         else finishTurn(events);
         notifyListeners(events);
-        return approved;
+        return move;
+    }
+
+    private void requirePendingLanding(PendingSquareEffect request) {
+        if (!board.piecesAt(request.square().position()).contains(request.piece())) {
+            throw new IllegalStateException("The pending landing no longer matches the board");
+        }
     }
 
     private PendingSquareEffect requirePendingEffect(long requestId) {
