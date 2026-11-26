@@ -68,6 +68,30 @@ public final class MoveGenerator {
         return List.copyOf(candidates);
     }
 
+    /** Forward effect distance is independent of the Standard die; Castle exit is not an effect move. */
+    public Optional<MoveCandidate> generateForwardEffect(Board board, Piece piece, int steps) {
+        Objects.requireNonNull(board, "board");
+        Objects.requireNonNull(piece, "piece");
+        if (steps < 0) throw new IllegalArgumentException("Forward steps must not be negative");
+        PlayerRoute route = routes.get(piece.color());
+        if (route == null) throw new IllegalArgumentException("Missing route for " + piece.color());
+        Position source = board.occupancy().entrySet().stream()
+                .filter(entry -> entry.getValue().contains(piece)).map(Map.Entry::getKey)
+                .findFirst().orElseThrow(() -> new IllegalStateException("Piece is not on this board: " + piece));
+        Square square = board.squareAt(source);
+        if (square.type() == SquareType.CASTLE) {
+            if (square.associatedColor() != SquareColor.fromPlayerColor(piece.color())) {
+                throw new IllegalStateException("Piece is in another color's Castle");
+            }
+            return Optional.empty();
+        }
+        int index = route.positions().indexOf(source);
+        if (index < 0) throw new IllegalStateException("Piece is outside its route: " + piece);
+        if (steps == 0 || steps > route.size() - 1 - index) return Optional.empty();
+        return Optional.of(new MoveCandidate(piece, source,
+                route.positions().subList(index + 1, index + steps + 1)));
+    }
+
     /**
      * Proposes a backward effect move for one placed piece, in reverse route order.
      * The path excludes the source, includes the destination and stops at Start.
