@@ -17,8 +17,8 @@ import java.util.Objects;
  * @see BoostDie
  */
 public class MediumStrategy implements DiceStrategy {
-    Die standartDie;
-    Die boostDie;
+    private final Die standartDie;
+    private final Die boostDie;
 
     /**
      * Creates a medium difficulty dice strategy using the default dice.
@@ -36,15 +36,15 @@ public class MediumStrategy implements DiceStrategy {
     /**
      * Creates a medium difficulty dice strategy using the specified dice for testing.
      *
-     * @param standartDie the die used for the standard roll
+     * @param standardDie the die used for the standard roll
      * @param boostDie the die used for the boost roll
-     * @throws NullPointerException if {@code standartDie} or {@code boostDie} is {@code null}
+     * @throws NullPointerException if {@code standardDie} or {@code boostDie} is {@code null}
      */
-    public MediumStrategy(Die standartDie, Die boostDie) {
-        Objects.requireNonNull(standartDie, "standard");
+    public MediumStrategy(Die standardDie, Die boostDie) {
+        Objects.requireNonNull(standardDie, "standard");
         Objects.requireNonNull(boostDie, "boost");
 
-        this.standartDie = standartDie;
+        this.standartDie = standardDie;
         this.boostDie = boostDie;
     }
 
