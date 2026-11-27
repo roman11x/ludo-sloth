@@ -4,5 +4,6 @@ package Model;
 public enum TurnPhase {
     WAITING_FOR_ROLL,
     WAITING_FOR_MOVE,
+    WAITING_FOR_EFFECT,
     GAME_OVER
 }

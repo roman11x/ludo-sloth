@@ -41,4 +41,9 @@ public interface GameListener {
     /** {@code player} must answer {@code question} before {@code piece}'s move is resolved. */
     default void questionRequired(Player player, Piece piece, Question question) {
     }
+
+    /** Resolve this request through Game.resolveSquareEffect after any required player input. */
+    default void squareEffectRequired(PendingSquareEffect effect) {
+    }
+
 }

@@ -5,6 +5,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.function.LongSupplier;
 import java.util.ArrayList;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -33,6 +35,13 @@ public final class Game {
     private final long startedAtNanos;
     private Duration finalDuration;
     private final List<GameListener> listeners = new ArrayList<>();
+    private PendingSquareEffect pendingSquareEffect;
+    private long nextEffectId;
+    private final Deque<NotificationBatch> notificationQueue = new ArrayDeque<>();
+    private boolean notifying;
+
+    private record NotificationBatch(List<Consumer<GameListener>> events, List<GameListener> recipients) { }
+
 
     public Game(List<Player> players) {
         this(players, Difficulty.EASY);
@@ -64,16 +73,18 @@ public final class Game {
 
     Game(List<Player> players, Difficulty difficulty, Die standardDie, Random boardRandom,
          Random firstPlayerRandom, Clock clock, LongSupplier nanoTime) {
+        this(players, difficulty, standardDie, firstPlayerRandom,
+                initialBoard(difficulty, boardRandom), PlayerRouteFactory.createEasy(), clock, nanoTime);
+    }
+
+    /** Injected layout for effect tests and later integration; normal setup still supports Easy only. */
+    Game(List<Player> players, Difficulty difficulty, Die standardDie, Random firstPlayerRandom,
+         Board board, Map<PlayerColor, PlayerRoute> routes, Clock clock, LongSupplier nanoTime) {
         this.difficulty = Objects.requireNonNull(difficulty, "difficulty");
-        if (difficulty != Difficulty.EASY) {
-            throw new IllegalArgumentException("Unsupported game difficulty: " + difficulty
-                    + "; currently only EASY is supported");
-        }
         Objects.requireNonNull(clock, "clock");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         List<Player> participants = List.copyOf(players);
         Objects.requireNonNull(standardDie, "standardDie");
-        Objects.requireNonNull(boardRandom, "boardRandom");
         Objects.requireNonNull(firstPlayerRandom, "firstPlayerRandom");
         List<PlayerSetup> setups = participants.stream()
                 .map(player -> new PlayerSetup(player.name(), player.color())).toList();
@@ -82,15 +93,26 @@ public final class Game {
             throw new IllegalArgumentException(String.join("; ", errors));
         }
 
-        this.board = Board.createEasy(boardRandom);
-        this.routes = PlayerRouteFactory.createEasy();
-        this.moveGenerator = new MoveGenerator(routes);
+        this.board = Objects.requireNonNull(board, "board");
+        if (board.hasPieces()) throw new IllegalArgumentException("A new game requires an empty board");
+        this.routes = Map.copyOf(routes);
+        this.moveGenerator = new MoveGenerator(this.routes);
         this.turnManager = new TurnManager(participants, standardDie, firstPlayerRandom);
         this.players = turnManager.players();
         placeInitialPieces();
         // Start only when setup, piece placement and first-player selection are complete.
         this.startTime = LocalDateTime.now(clock);
         this.startedAtNanos = this.nanoTime.getAsLong();
+    }
+
+    private static Board initialBoard(Difficulty difficulty, Random random) {
+        Objects.requireNonNull(difficulty, "difficulty");
+        Objects.requireNonNull(random, "boardRandom");
+        if (difficulty != Difficulty.EASY) {
+            throw new IllegalArgumentException("Unsupported game difficulty: " + difficulty
+                    + "; currently only EASY is supported");
+        }
+        return Board.createEasy(random);
     }
 
     private void placeInitialPieces() {
@@ -175,13 +197,36 @@ public final class Game {
         List<Consumer<GameListener>> events = new ArrayList<>();
         applyMove(activePlayer, move, events);
         legalMoves = List.of();
+        continueAfterLanding(piece, events);
+        notifyListeners(events);
+        return move;
+    }
+
+    /** Request one effect at a time; continuing with a new landing imposes no chain-length cap. */
+    private void continueAfterLanding(Piece piece, List<Consumer<GameListener>> events) {
+        Position position = piecePosition(piece);
+        Square destination = board.squareAt(position);
+        if (destination.type() == SquareType.QUESTION || destination.type() == SquareType.SURPRISE) {
+            pendingSquareEffect = new PendingSquareEffect(++nextEffectId,
+                    turnManager.currentPlayer(), piece, destination);
+            turnManager.pauseForEffect();
+            PendingSquareEffect request = pendingSquareEffect;
+            events.add(listener -> listener.squareEffectRequired(request));
+        } else {
+            finishTurn(events);
+        }
+    }
+
+    /** Shared completion path, reached only after all landing effects have resolved. */
+    private void finishTurn(List<Consumer<GameListener>> events) {
+        Player activePlayer = turnManager.currentPlayer();
         boolean playerFinished = hasFinished(activePlayer);
         if (playerFinished && !ranking.contains(activePlayer)) {
             ranking.add(activePlayer);
             int place = ranking.size();
             events.add(listener -> listener.playerFinished(activePlayer, place));
         }
-        turnManager.completeTurn(player, playerFinished);
+        turnManager.completeTurn(activePlayer.color(), playerFinished);
         if (isFinished()) {
             finalDuration = elapsedDuration();
             // The remaining participant is last, without moving their pieces
@@ -195,8 +240,71 @@ public final class Game {
             Player next = turnManager.currentPlayer();
             events.add(listener -> listener.turnPassed(next));
         }
+    }
+
+    /** The pending request remains stable until accepted; no timeout is imposed. */
+    public Optional<PendingSquareEffect> pendingSquareEffect() {
+        return Optional.ofNullable(pendingSquareEffect);
+    }
+
+    /** Resolve an effect on the landing piece. Positive steps move forward, negative backward. */
+    public Optional<MoveCandidate> resolveSquareEffect(long requestId, int steps) {
+        PendingSquareEffect request = requirePendingEffect(requestId);
+        return resolveSquareEffect(requestId, request.piece(), steps);
+    }
+
+    /**
+     * Continuation for trusted question/surprise orchestration, not raw UI answers.
+     * That logic validates the answer/event and chooses the affected piece/distance.
+     * Questions affect their landing piece; a Surprise can move a selected opponent backward.
+     * Zero steps or no legal displacement consumes this effect without re-triggering the source.
+     * Rejected or stale requests leave the pending request and board unchanged.
+     */
+    public Optional<MoveCandidate> resolveSquareEffect(long requestId, Piece affectedPiece, int steps) {
+        PendingSquareEffect request = requirePendingEffect(requestId);
+        Objects.requireNonNull(affectedPiece, "affectedPiece");
+        if (steps == Integer.MIN_VALUE) throw new IllegalArgumentException("Effect distance is too large");
+        if (request.square().type() == SquareType.QUESTION && !affectedPiece.equals(request.piece())) {
+            throw new IllegalArgumentException("A Question affects its landing piece only");
+        }
+        if (steps > 0 && !affectedPiece.equals(request.piece())) {
+            throw new IllegalArgumentException("Only the landing piece can move forward for this effect");
+        }
+        Player owner = pieceOwner(affectedPiece);
+        if (!board.piecesAt(request.square().position()).contains(request.piece())) {
+            throw new IllegalStateException("The pending landing no longer matches the board");
+        }
+        Optional<MoveCandidate> proposed = steps < 0
+                ? moveGenerator.generateBackward(board, affectedPiece, -steps)
+                : moveGenerator.generateForwardEffect(board, affectedPiece, steps);
+        Optional<MoveCandidate> approved = proposed.flatMap(candidate -> moveRules.legalEventMove(board, candidate));
+        List<Consumer<GameListener>> events = new ArrayList<>();
+        approved.ifPresent(move -> applyMove(owner, move, events));
+        pendingSquareEffect = null;
+        turnManager.resumeAfterEffect();
+        if (approved.isPresent()) continueAfterLanding(affectedPiece, events);
+        else finishTurn(events);
         notifyListeners(events);
-        return move;
+        return approved;
+    }
+
+    private PendingSquareEffect requirePendingEffect(long requestId) {
+        if (turnManager.phase() != TurnPhase.WAITING_FOR_EFFECT || pendingSquareEffect == null
+                || pendingSquareEffect.id() != requestId) {
+            throw new IllegalStateException("No matching pending square effect");
+        }
+        return pendingSquareEffect;
+    }
+
+    private Player pieceOwner(Piece piece) {
+        return players.stream().filter(player -> player.pieces().contains(piece)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Piece does not belong to a participant"));
+    }
+
+    private Position piecePosition(Piece piece) {
+        return board.occupancy().entrySet().stream().filter(entry -> entry.getValue().contains(piece))
+                .map(Map.Entry::getKey).findFirst()
+                .orElseThrow(() -> new IllegalStateException("Piece is not on this board: " + piece));
     }
 
     /**
@@ -211,6 +319,9 @@ public final class Game {
     public Optional<MoveCandidate> moveBackward(Piece piece, int steps) {
         Objects.requireNonNull(piece, "piece");
         if (isFinished()) throw new IllegalStateException("The game is over");
+        if (turnManager.phase() == TurnPhase.WAITING_FOR_EFFECT) {
+            throw new IllegalStateException("Resolve the pending effect through resolveSquareEffect");
+        }
         Player owner = players.stream().filter(player -> player.pieces().contains(piece))
                 .findFirst().orElseThrow(() -> new IllegalArgumentException(
                         "Piece does not belong to a participant"));
@@ -245,11 +356,20 @@ public final class Game {
 
     /** Delivers each event to every listener in registration order, against a snapshot of the listeners. */
     private void notifyListeners(List<Consumer<GameListener>> events) {
-        List<GameListener> recipients = List.copyOf(listeners);
-        for (Consumer<GameListener> event : events) {
-            for (GameListener listener : recipients) {
-                event.accept(listener);
+        notificationQueue.addLast(new NotificationBatch(List.copyOf(events), List.copyOf(listeners)));
+        if (notifying) return;
+        notifying = true;
+        try {
+            // An automatic effect may resume synchronously in a listener. Queue it instead of recursing.
+            while (!notificationQueue.isEmpty()) {
+                NotificationBatch batch = notificationQueue.removeFirst();
+                for (Consumer<GameListener> event : batch.events()) {
+                    for (GameListener listener : batch.recipients()) event.accept(listener);
+                }
             }
+        } finally {
+            notifying = false;
+            notificationQueue.clear();
         }
     }
 
