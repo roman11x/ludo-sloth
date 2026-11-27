@@ -123,21 +123,28 @@ public final class TurnManager {
     public void completeTurn(PlayerColor player, boolean playerFinished) {
         requireActivePlayer(player);
         requirePhase(TurnPhase.WAITING_FOR_MOVE);
-        if (playerFinished) {
-            finishedPlayers.add(player);
-            if (finishedPlayers.size() == players.size() - 1) {
-                phase = TurnPhase.GAME_OVER;
-                lastRoll = 0;
-                consecutiveSixes = 0;
-            } else {
-                advancePlayer();
-            }
+        if (playerFinished) finishedPlayers.add(player);
+        if (finishedPlayers.size() >= players.size() - 1) {
+            phase = TurnPhase.GAME_OVER;
+            lastRoll = 0;
+            consecutiveSixes = 0;
+        } else if (finishedPlayers.contains(player)) {
+            advancePlayer();
         } else if (lastRoll == 6) {
             lastRoll = 0;
             phase = TurnPhase.WAITING_FOR_ROLL;
         } else {
             advancePlayer();
         }
+    }
+
+    /** Game has verified this participant's four pieces, possibly during an opponent's effect chain. */
+    void recordFinishedPlayer(PlayerColor player) {
+        requirePhase(TurnPhase.WAITING_FOR_MOVE);
+        if (players.stream().noneMatch(participant -> participant.color() == player)) {
+            throw new IllegalArgumentException("Finished player must participate in this game");
+        }
+        finishedPlayers.add(player);
     }
 
     /** Suspend the current roll while Game resolves a landing effect. */
