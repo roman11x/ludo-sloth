@@ -140,6 +140,18 @@ public final class TurnManager {
         }
     }
 
+    /** Suspend the current roll while Game resolves a landing effect. */
+    void pauseForEffect() {
+        requirePhase(TurnPhase.WAITING_FOR_MOVE);
+        phase = TurnPhase.WAITING_FOR_EFFECT;
+    }
+
+    /** Resume the same roll so Game can either request another effect or complete the turn. */
+    void resumeAfterEffect() {
+        requirePhase(TurnPhase.WAITING_FOR_EFFECT);
+        phase = TurnPhase.WAITING_FOR_MOVE;
+    }
+
     private void requirePhase(TurnPhase expected) {
         if (phase != expected) {
             throw new IllegalStateException("Expected " + expected + " but turn is " + phase);
