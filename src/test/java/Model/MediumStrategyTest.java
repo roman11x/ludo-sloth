@@ -47,4 +47,13 @@ class MediumStrategyTest {
         assertThrows(NullPointerException.class, () -> new MediumStrategy(null, boost));
         assertThrows(NullPointerException.class, () -> new MediumStrategy(null, null));
     }
+    
+    @Test
+    void rejectsOutOfRangeBoostRolls() {
+        Die standard = () -> 4;
+        Die lowBoost = () -> 0;
+        assertThrows(IllegalArgumentException.class, () -> new MediumStrategy(standard, lowBoost).rollDice());
+        Die highBoost = () -> 6;
+        assertThrows(IllegalArgumentException.class, () -> new MediumStrategy(standard, highBoost).rollDice());
+    }
 }
