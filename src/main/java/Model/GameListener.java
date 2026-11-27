@@ -38,7 +38,20 @@ public interface GameListener {
     default void gameOver(List<Player> ranking) {
     }
 
+    /** Choose an opponent first, then one of their legal pieces after the event's single roll. */
+    default void opponentMoveRequired(PendingOpponentMove choice) {
+    }
+
+    /** No opponent can move; the event ends without displacement and the original turn resumes. */
+    default void opponentMoveCancelled(PendingSquareEffect effect, int roll) {
+    }
+
     /** {@code player} must answer {@code question} before {@code piece}'s move is resolved. */
     default void questionRequired(Player player, Piece piece, Question question) {
     }
+
+    /** Resolve this request through Game.resolveSquareEffect after any required player input. */
+    default void squareEffectRequired(PendingSquareEffect effect) {
+    }
+
 }
