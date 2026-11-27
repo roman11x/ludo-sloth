@@ -7,6 +7,7 @@ import java.util.function.LongSupplier;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -27,6 +28,7 @@ public final class Game {
     private final Map<PlayerColor, PlayerRoute> routes;
     private final TurnManager turnManager;
     private final MoveGenerator moveGenerator;
+    private final Die standardDie;
     private final MoveRules moveRules = new MoveRules();
     private List<MoveCandidate> legalMoves = List.of();
     private final List<Player> ranking = new ArrayList<>();
@@ -36,6 +38,7 @@ public final class Game {
     private Duration finalDuration;
     private final List<GameListener> listeners = new ArrayList<>();
     private PendingSquareEffect pendingSquareEffect;
+    private PendingOpponentMove pendingOpponentMove;
     private long nextEffectId;
     private final Deque<NotificationBatch> notificationQueue = new ArrayDeque<>();
     private boolean notifying;
@@ -84,7 +87,7 @@ public final class Game {
         Objects.requireNonNull(clock, "clock");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
         List<Player> participants = List.copyOf(players);
-        Objects.requireNonNull(standardDie, "standardDie");
+        this.standardDie = Objects.requireNonNull(standardDie, "standardDie");
         Objects.requireNonNull(firstPlayerRandom, "firstPlayerRandom");
         List<PlayerSetup> setups = participants.stream()
                 .map(player -> new PlayerSetup(player.name(), player.color())).toList();
@@ -248,13 +251,15 @@ public final class Game {
     }
 
     /**
-     * Executes one already-selected S02 event on the pending Surprise's landing piece.
-     * Selection belongs to SurpriseEventSelector; the other three events have separate handlers.
+     * Handles an already-selected Surprise: S02 transfers/movement, or S03 opponent selection.
+     * Selection belongs to SurpriseEventSelector; skip/UltraBoost have separate handlers.
+     * Starting S03 returns empty while waiting for input, not a completed/no-op effect.
      * Direct transfers have a destination-only path (not the intervening route), while back-three
      * uses the existing reverse-route rules, captures and chained-effect continuation.
      */
     public Optional<MoveCandidate> resolveSurpriseEffect(long requestId, SurpriseEvent event) {
         PendingSquareEffect request = requirePendingEffect(requestId);
+        requireNoOpponentSelection();
         Objects.requireNonNull(event, "event");
         if (request.square().type() != SquareType.SURPRISE) {
             throw new IllegalArgumentException("A Surprise event requires a pending Surprise square");
@@ -263,9 +268,112 @@ public final class Game {
             case MOVE_BACK_THREE -> resolveSquareEffect(requestId, -3);
             case MOVE_TO_FINISH -> transferSurprisePiece(request, routes.get(request.piece().color()).finish());
             case RETURN_TO_CASTLE -> transferSurprisePiece(request, surpriseCastleSlot(request.piece()));
-            case MOVE_OPPONENT_BACKWARD, SKIP_NEXT_TURN, EXTRA_ULTRA_TURN ->
+            case MOVE_OPPONENT_BACKWARD -> {
+                beginOpponentBackward(requestId);
+                yield Optional.empty();
+            }
+            case SKIP_NEXT_TURN, EXTRA_ULTRA_TURN ->
                     throw new IllegalArgumentException("This event requires its own handler: " + event);
         };
+    }
+
+    /** Begin S03 without rolling: the triggering player must choose an opponent first. */
+    public PendingOpponentMove beginOpponentBackward(long requestId) {
+        PendingSquareEffect request = requirePendingEffect(requestId);
+        requireNoOpponentSelection();
+        if (request.square().type() != SquareType.SURPRISE) {
+            throw new IllegalArgumentException("Opponent movement requires a pending Surprise");
+        }
+        requirePendingLanding(request);
+        List<Player> opponents = players.stream()
+                .filter(player -> player.color() != request.player().color() && !hasFinished(player)).toList();
+        pendingOpponentMove = new PendingOpponentMove(requestId, opponents, null, 0, Map.of());
+        PendingOpponentMove choice = pendingOpponentMove;
+        notifyListeners(List.of(listener -> listener.opponentMoveRequired(choice)));
+        return choice;
+    }
+
+    /** Read-only input state; absent after movement or cancellation, including between chained effects. */
+    public Optional<PendingOpponentMove> pendingOpponentMove() {
+        return Optional.ofNullable(pendingOpponentMove);
+    }
+
+    /**
+     * Choose an opponent, then roll the Standard die once, outside TurnManager's normal roll path.
+     * If this opponent has no move, another can be chosen with the SAME roll. If none has a move,
+     * cancel and resume the original turn; an empty return signals that cancellation.
+     */
+    public Optional<PendingOpponentMove> chooseOpponent(long requestId, PlayerColor color) {
+        PendingOpponentMove choice = requireOpponentSelection(requestId);
+        Objects.requireNonNull(color, "color");
+        Player opponent = choice.opponents().stream().filter(player -> player.color() == color)
+                .findFirst().orElseThrow(() -> new IllegalArgumentException("Choose a participating unfinished opponent"));
+        if (!choice.moves().isEmpty()) {
+            throw new IllegalStateException("Choose a piece of the selected opponent before continuing");
+        }
+        int roll = choice.roll();
+        if (roll == 0) {
+            // SPC-004: this draw neither grants a six bonus nor changes the normal six counter.
+            roll = standardDie.roll();
+            if (roll < 1 || roll > 6) throw new IllegalStateException("Standard die returned a value outside 1-6");
+        }
+        int steps = (roll + 1) / 2;
+        Map<PlayerColor, List<MoveCandidate>> options = new EnumMap<>(PlayerColor.class);
+        for (Player player : choice.opponents()) options.put(player.color(), opponentBackwardMoves(player, steps));
+        if (options.values().stream().allMatch(List::isEmpty)) {
+            PendingSquareEffect request = requirePendingEffect(requestId);
+            int result = roll;
+            List<Consumer<GameListener>> events = new ArrayList<>();
+            events.add(listener -> listener.opponentMoveCancelled(request, result));
+            finishResolvedEffect(request.piece(), Optional.empty(), events);
+            return Optional.empty();
+        }
+        pendingOpponentMove = new PendingOpponentMove(requestId, choice.opponents(), opponent, roll, options);
+        PendingOpponentMove updated = pendingOpponentMove;
+        notifyListeners(List.of(listener -> listener.opponentMoveRequired(updated)));
+        return Optional.of(updated);
+    }
+
+    /** Execute only a stored eligible choice; a stale source/path is rejected without consuming input. */
+    public MoveCandidate playOpponentPiece(long requestId, Piece piece) {
+        PendingOpponentMove choice = requireOpponentSelection(requestId);
+        Objects.requireNonNull(piece, "piece");
+        if (choice.roll() == 0) throw new IllegalStateException("Choose an opponent before choosing a piece");
+        MoveCandidate stored = choice.moves().stream().filter(move -> move.piece().equals(piece)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Piece is not an eligible choice for this opponent"));
+        MoveCandidate current = opponentBackwardMoves(choice.selectedOpponent(), choice.steps()).stream()
+                .filter(stored::equals).findFirst().orElseThrow(() -> new IllegalStateException("The choice no longer matches the board"));
+        List<Consumer<GameListener>> events = new ArrayList<>();
+        applyMove(choice.selectedOpponent(), current, events);
+        finishResolvedEffect(piece, Optional.of(current), events);
+        return current;
+    }
+
+    private List<MoveCandidate> opponentBackwardMoves(Player opponent, int steps) {
+        List<MoveCandidate> moves = new ArrayList<>();
+        for (Piece piece : opponent.pieces()) {
+            Square square = board.squareAt(piecePosition(piece));
+            if (square.type() == SquareType.CASTLE || square.type() == SquareType.HOME_PATH
+                    || square.type() == SquareType.FINISHING) continue;
+            moveGenerator.generateBackward(board, piece, steps)
+                    .flatMap(candidate -> moveRules.legalEventMove(board, candidate)).ifPresent(moves::add);
+        }
+        return List.copyOf(moves);
+    }
+
+    private PendingOpponentMove requireOpponentSelection(long requestId) {
+        PendingSquareEffect request = requirePendingEffect(requestId);
+        if (pendingOpponentMove == null || pendingOpponentMove.effectId() != requestId) {
+            throw new IllegalStateException("No matching opponent selection");
+        }
+        requirePendingLanding(request);
+        return pendingOpponentMove;
+    }
+
+    private void requireNoOpponentSelection() {
+        if (pendingOpponentMove != null) {
+            throw new IllegalStateException("Complete the pending opponent selection first");
+        }
     }
 
     private Position surpriseCastleSlot(Piece piece) {
@@ -306,6 +414,7 @@ public final class Game {
      */
     public Optional<MoveCandidate> resolveSquareEffect(long requestId, Piece affectedPiece, int steps) {
         PendingSquareEffect request = requirePendingEffect(requestId);
+        requireNoOpponentSelection();
         Objects.requireNonNull(affectedPiece, "affectedPiece");
         if (steps == Integer.MIN_VALUE) throw new IllegalArgumentException("Effect distance is too large");
         if (request.square().type() == SquareType.QUESTION && !affectedPiece.equals(request.piece())) {
@@ -328,6 +437,7 @@ public final class Game {
     private Optional<MoveCandidate> finishResolvedEffect(Piece affectedPiece, Optional<MoveCandidate> move,
                                                         List<Consumer<GameListener>> events) {
         pendingSquareEffect = null;
+        pendingOpponentMove = null;
         turnManager.resumeAfterEffect();
         recordPlayerCompletion(pieceOwner(affectedPiece), events);
         if (move.isPresent()) continueAfterLanding(affectedPiece, events);
