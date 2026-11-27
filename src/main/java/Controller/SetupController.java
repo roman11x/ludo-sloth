@@ -16,7 +16,7 @@ import View.BoardView;
 import View.SetupView;
 import javafx.scene.Parent;
 
-/** Validates setup input and opens a new Easy game with its results flow. */
+/** Validates setup input and opens a new Easy or Medium game with its results flow. */
 public class SetupController {
     private final Consumer<Parent> showScreen;
     private final Runnable onBack;
@@ -40,14 +40,18 @@ public class SetupController {
 
     private void startGame() {
         if (gameStarted) return;
-        Difficulty difficulty = view.getDifficulty();
+        Difficulty difficulty = parseDifficulty(view.getDifficulty());
         Validation input = parseAndValidateSetup(view.getPlayerNames(), view.getPlayerColours(), difficulty);
         if (!input.errors().isEmpty()) {
             view.showValidationMessages(input.errors());
             return;
         }
+        Game game = createGame(input.players(), difficulty);
+        if (game == null) {
+            view.showValidationMessages(List.of(boardNotAvailableMessage(difficulty)));
+            return;
+        }
         view.clearValidationMessages();
-        Game game = new Game(input.players().stream().map(Player::new).toList(), difficulty);
         BoardView board = new BoardView();
         GameController controller = new GameController(board, game);
         Runnable mainMenu = () -> {
@@ -63,6 +67,35 @@ public class SetupController {
         results.showWhenOver(controller);
         gameStarted = true;
         showScreen.accept(board.getRoot());
+    }
+
+    /** "Easy" or "Medium" (any case) as the screen shows it; {@code null} for anything else. */
+    static Difficulty parseDifficulty(String name) {
+        if (name == null) return null;
+        return switch (name.strip().toUpperCase(Locale.ROOT)) {
+            case "EASY" -> Difficulty.EASY;
+            case "MEDIUM" -> Difficulty.MEDIUM;
+            default -> null;
+        };
+    }
+
+    /**
+     * Creates a game for validated players, or returns {@code null} if Model has no board for this
+     * difficulty yet; Model rejects such a difficulty before creating anything.
+     */
+    static Game createGame(List<PlayerSetup> players, Difficulty difficulty) {
+        List<Player> participants = players.stream().map(Player::new).toList();
+        try {
+            return new Game(participants, difficulty);
+        } catch (IllegalArgumentException unsupported) {
+            if (difficulty == Difficulty.EASY) throw unsupported;
+            return null;
+        }
+    }
+
+    static String boardNotAvailableMessage(Difficulty difficulty) {
+        String name = difficulty.name();
+        return "The " + name.charAt(0) + name.substring(1).toLowerCase(Locale.ROOT) + " board is not available yet";
     }
 
     /** Parse raw form values and delegate setup rules to SetupValidator without changing the input. */

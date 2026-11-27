@@ -1,7 +1,5 @@
 package View;
 
-import Model.Difficulty;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,6 +29,8 @@ import javafx.scene.shape.Circle;
 public class SetupView {
 
     private static final String[] COLOUR_NAMES = {"Red", "Green", "Yellow", "Blue"};
+    private static final String[] DIFFICULTY_NAMES = {"Easy", "Medium"};
+    private static final String EASY_DESCRIPTION = "Classic board, one standard die.";
     private static final int MIN_PLAYERS = 2;
     private static final int MAX_PLAYERS = 4;
     private static final int DEFAULT_PLAYER_COUNT = 2;
@@ -248,22 +248,34 @@ public class SetupView {
         return box;
     }
 
-    /** Selected game difficulty; currently the screen offers Easy only. */
-    public Difficulty getDifficulty() {
+    /**
+     * Returns the selected difficulty as "Easy" or "Medium" (Easy unless the player chose
+     * otherwise), or {@code null} if none is selected.
+     */
+    public String getDifficulty() {
         Toggle selected = difficultyGroup.getSelectedToggle();
-        return selected == null ? null : (Difficulty) selected.getUserData();
+        return selected == null ? null : (String) selected.getUserData();
     }
 
     private VBox buildDifficulty() {
-        RadioButton easy = new RadioButton("Easy");
-        easy.getStyleClass().add("ludo-radio");
-        easy.setUserData(Difficulty.EASY);
-        easy.setToggleGroup(difficultyGroup);
-        easy.setSelected(true);
-        HBox row = new HBox(16, sectionLabel("Difficulty:"), easy);
+        HBox row = new HBox(16, sectionLabel("Difficulty:"));
         row.setAlignment(Pos.CENTER_LEFT);
-        Label description = new Label("Classic board, one standard die.");
+        for (String name : DIFFICULTY_NAMES) {
+            RadioButton option = new RadioButton(name);
+            option.getStyleClass().add("ludo-radio");
+            option.setUserData(name);
+            option.setToggleGroup(difficultyGroup);
+            option.setSelected(name.equals(DIFFICULTY_NAMES[0]));
+            row.getChildren().add(option);
+        }
+        keepOneSelected(difficultyGroup);
+        Label description = new Label(EASY_DESCRIPTION);
         description.getStyleClass().add("ludo-hint");
+        description.managedProperty().bind(description.visibleProperty());
+        difficultyGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
+            description.setVisible("Easy".equals(getDifficulty()));
+            refreshSummary();
+        });
         return new VBox(4, row, description);
     }
 
@@ -328,7 +340,7 @@ public class SetupView {
 
     private void refreshSummary() {
         summaryLines.getChildren().setAll(
-                summaryText("Difficulty: Easy"),
+                summaryText("Difficulty: " + (getDifficulty() == null ? "(not chosen)" : getDifficulty())),
                 summaryText("Players: " + playerCount));
         for (PlayerRow row : rows) {
             if (!row.isShown()) {
