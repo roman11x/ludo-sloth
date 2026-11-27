@@ -218,7 +218,8 @@ class TurnManagerTest {
         for (int value : new int[]{0, 7}) {
             List<Player> participants = players(2);
             TurnManager turns = new TurnManager(participants, () -> value, firstAt(0));
-            assertThrows(IllegalStateException.class, () -> turns.roll(participants.getFirst().color()));
+            // DiceRoll rejects a Standard value outside 1-6 before any turn state changes.
+            assertThrows(IllegalArgumentException.class, () -> turns.roll(participants.getFirst().color()));
             assertSame(participants.getFirst(), turns.currentPlayer());
             assertEquals(TurnPhase.WAITING_FOR_ROLL, turns.phase());
         }
@@ -233,7 +234,7 @@ class TurnManagerTest {
         assertThrows(IllegalArgumentException.class, () -> new TurnManager(List.of(
                 new Player("One", PlayerColor.RED), new Player("Two", PlayerColor.RED))));
         assertThrows(NullPointerException.class, () -> new TurnManager(null));
-        assertThrows(NullPointerException.class, () -> new TurnManager(players(2), null, new Random()));
+        assertThrows(NullPointerException.class, () -> new TurnManager(players(2), (Die) null, new Random()));
         assertThrows(NullPointerException.class, () -> new TurnManager(players(2), () -> 1, null));
     }
 }
