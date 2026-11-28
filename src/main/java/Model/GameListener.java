@@ -46,8 +46,11 @@ public interface GameListener {
     default void opponentMoveCancelled(PendingSquareEffect effect, int roll) {
     }
 
-    /** {@code player} must answer {@code question} before {@code piece}'s move is resolved. */
-    default void questionRequired(Player player, Piece piece, Question question) {
+    /**
+     * {@code player} must answer {@code question} before {@code piece}'s move is resolved.
+     * {@code effectId} identifies the pending landing; the answer is later reported with this id.
+     */
+    default void questionRequired(long effectId, Player player, Piece piece, Question question) {
     }
 
     /** Resolve this request through Game.resolveSquareEffect after any required player input. */
