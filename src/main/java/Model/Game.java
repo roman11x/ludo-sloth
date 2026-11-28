@@ -38,10 +38,12 @@ public final class Game {
     private Duration finalDuration;
     private final List<GameListener> listeners = new ArrayList<>();
     private PendingSquareEffect pendingSquareEffect;
+    private Question pendingQuestion;
     private PendingOpponentMove pendingOpponentMove;
     private long nextEffectId;
     private final Deque<NotificationBatch> notificationQueue = new ArrayDeque<>();
     private boolean notifying;
+    private final QuestionPicker questionPicker;
 
     private record NotificationBatch(List<Consumer<GameListener>> events, List<GameListener> recipients) { }
 
@@ -83,6 +85,14 @@ public final class Game {
     /** Injected layout for effect tests and later integration; normal setup still supports Easy only. */
     Game(List<Player> players, Difficulty difficulty, Die standardDie, Random firstPlayerRandom,
          Board board, Map<PlayerColor, PlayerRoute> routes, Clock clock, LongSupplier nanoTime) {
+        this(players, difficulty, standardDie, firstPlayerRandom, board, routes, clock, nanoTime,
+                new QuestionPicker(new StubQuestionBank()));
+    }
+
+    /** Injected layout plus question picker, for question tests; sets up the game. */
+    Game(List<Player> players, Difficulty difficulty, Die standardDie, Random firstPlayerRandom,
+         Board board, Map<PlayerColor, PlayerRoute> routes, Clock clock, LongSupplier nanoTime,
+         QuestionPicker questionPicker) {
         this.difficulty = Objects.requireNonNull(difficulty, "difficulty");
         Objects.requireNonNull(clock, "clock");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
@@ -106,6 +116,7 @@ public final class Game {
         // Start only when setup, piece placement and first-player selection are complete.
         this.startTime = LocalDateTime.now(clock);
         this.startedAtNanos = this.nanoTime.getAsLong();
+        this.questionPicker = Objects.requireNonNull(questionPicker, "questionPicker");
     }
 
     private static Board initialBoard(Difficulty difficulty, Random random) {
@@ -214,7 +225,13 @@ public final class Game {
                     turnManager.currentPlayer(), piece, destination);
             turnManager.pauseForEffect();
             PendingSquareEffect request = pendingSquareEffect;
-            events.add(listener -> listener.squareEffectRequired(request));
+            if (destination.type() == SquareType.QUESTION) {
+                Question question = questionPicker.pickQuestion(destination.questionDifficulty());
+                pendingQuestion = question;
+                events.add(listener -> listener.questionRequired(request.id(), request.player(), piece, question));
+            } else {
+                events.add(listener -> listener.squareEffectRequired(request));
+            }
         } else {
             finishTurn(events);
         }
@@ -434,10 +451,41 @@ public final class Game {
         return finishResolvedEffect(affectedPiece, approved, events);
     }
 
+    /**
+     * Checks an answer to the pending question and resolves its square effect.
+     * A correct answer moves the landing piece forward, while an incorrect answer
+     * moves it backward. The number of squares moved is determined by the question
+     * difficulty.
+     *
+     * @param id the identifier of the pending square effect
+     * @param answerIndex the index of the selected answer
+     * @return {@code true} if the selected answer is correct; {@code false} otherwise
+     * @throws IllegalStateException if {@code id} does not identify the pending effect
+     *                               or there is no pending question
+     * @throws IllegalArgumentException if {@code answerIndex} is outside the available
+     *                                  answer range
+     */
+    public boolean answerQuestion(long id, int answerIndex) {
+        requirePendingEffect(id);
+        if (pendingQuestion == null) {
+            throw new IllegalStateException("No pending question");
+        }
+        if (answerIndex < 0 || answerIndex >= pendingQuestion.answers().size()) {
+            throw new IllegalArgumentException("Got: " + answerIndex + ", valid indexes are between 0 and "
+                    + (pendingQuestion.answers().size() - 1));
+        }
+        boolean correct = answerIndex == pendingQuestion.correctIndex();
+        var steps = pendingQuestion.difficulty().steps();
+        var squares = correct ? steps : -steps;
+        resolveSquareEffect(id, squares);
+        return correct;
+    }
+
     private Optional<MoveCandidate> finishResolvedEffect(Piece affectedPiece, Optional<MoveCandidate> move,
                                                         List<Consumer<GameListener>> events) {
         pendingSquareEffect = null;
         pendingOpponentMove = null;
+        pendingQuestion = null;
         turnManager.resumeAfterEffect();
         recordPlayerCompletion(pieceOwner(affectedPiece), events);
         if (move.isPresent()) continueAfterLanding(affectedPiece, events);

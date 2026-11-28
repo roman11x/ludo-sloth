@@ -35,7 +35,7 @@ class GameListenerTest {
         @Override public void gameOver(List<Player> ranking) {
             events.add(prefix + "over " + ranking.stream().map(Player::name).toList());
         }
-        @Override public void questionRequired(Player player, Piece piece, Question question) {
+        @Override public void questionRequired(long effectId, Player player, Piece piece, Question question) {
             events.add(prefix + "question " + player.name());
         }
     }

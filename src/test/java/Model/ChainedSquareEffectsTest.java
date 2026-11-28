@@ -71,6 +71,9 @@ class ChainedSquareEffectsTest {
                 assertEquals(QuestionDifficulty.EASY, effect.square().questionDifficulty());
                 events.add("input");
             }
+            @Override public void questionRequired(long effectId, Player player, Piece piece, Question question) {
+                squareEffectRequired(game.pendingSquareEffect().orElseThrow()); // question squares count as effects here
+            }
             @Override public void turnPassed(Player player) { events.add("turn"); }
         });
         playFrom(game, 2);
@@ -141,6 +144,9 @@ class ChainedSquareEffectsTest {
         AtomicInteger requests = new AtomicInteger();
         game.addListener(new GameListener() {
             @Override public void squareEffectRequired(PendingSquareEffect effect) { requests.incrementAndGet(); }
+            @Override public void questionRequired(long effectId, Player player, Piece piece, Question question) {
+                squareEffectRequired(game.pendingSquareEffect().orElseThrow()); // question squares count as effects here
+            }
         });
         relocate(game, red, at(game, 4));
         relocate(game, new Piece(PlayerColor.RED, 2), at(game, 4));
@@ -248,6 +254,9 @@ class ChainedSquareEffectsTest {
                 int number = requests.incrementAndGet();
                 int distance = number > 3000 ? 0 : effect.square().position().equals(at(game, 3)) ? 1 : -1;
                 game.resolveSquareEffect(effect.id(), distance);
+            }
+            @Override public void questionRequired(long effectId, Player player, Piece piece, Question question) {
+                squareEffectRequired(game.pendingSquareEffect().orElseThrow()); // question squares count as effects here
             }
         });
         playFrom(game, 2);
