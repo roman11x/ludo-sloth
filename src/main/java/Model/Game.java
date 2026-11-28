@@ -224,7 +224,12 @@ public final class Game {
                     turnManager.currentPlayer(), piece, destination);
             turnManager.pauseForEffect();
             PendingSquareEffect request = pendingSquareEffect;
-            events.add(listener -> listener.squareEffectRequired(request));
+            if (destination.type() == SquareType.QUESTION) {
+                Question question = questionPicker.pickQuestion(destination.questionDifficulty());
+                events.add(listener -> listener.questionRequired(request.id(), request.player(), piece, question));
+            } else {
+                events.add(listener -> listener.squareEffectRequired(request));
+            }
         } else {
             finishTurn(events);
         }
