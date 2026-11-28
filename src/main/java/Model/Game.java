@@ -42,6 +42,7 @@ public final class Game {
     private long nextEffectId;
     private final Deque<NotificationBatch> notificationQueue = new ArrayDeque<>();
     private boolean notifying;
+    private final QuestionPicker questionPicker;
 
     private record NotificationBatch(List<Consumer<GameListener>> events, List<GameListener> recipients) { }
 
@@ -83,6 +84,14 @@ public final class Game {
     /** Injected layout for effect tests and later integration; normal setup still supports Easy only. */
     Game(List<Player> players, Difficulty difficulty, Die standardDie, Random firstPlayerRandom,
          Board board, Map<PlayerColor, PlayerRoute> routes, Clock clock, LongSupplier nanoTime) {
+        this(players, difficulty, standardDie, firstPlayerRandom, board, routes, clock, nanoTime,
+                new QuestionPicker(new StubQuestionBank()));
+    }
+
+    /** Injected layout plus question picker, for question tests; sets up the game. */
+    Game(List<Player> players, Difficulty difficulty, Die standardDie, Random firstPlayerRandom,
+         Board board, Map<PlayerColor, PlayerRoute> routes, Clock clock, LongSupplier nanoTime,
+         QuestionPicker questionPicker) {
         this.difficulty = Objects.requireNonNull(difficulty, "difficulty");
         Objects.requireNonNull(clock, "clock");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
@@ -106,6 +115,7 @@ public final class Game {
         // Start only when setup, piece placement and first-player selection are complete.
         this.startTime = LocalDateTime.now(clock);
         this.startedAtNanos = this.nanoTime.getAsLong();
+        this.questionPicker = Objects.requireNonNull(questionPicker, "questionPicker");
     }
 
     private static Board initialBoard(Difficulty difficulty, Random random) {
