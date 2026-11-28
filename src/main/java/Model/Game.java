@@ -451,6 +451,36 @@ public final class Game {
         return finishResolvedEffect(affectedPiece, approved, events);
     }
 
+    /**
+     * Checks an answer to the pending question and resolves its square effect.
+     * A correct answer moves the landing piece forward, while an incorrect answer
+     * moves it backward. The number of squares moved is determined by the question
+     * difficulty.
+     *
+     * @param id the identifier of the pending square effect
+     * @param answerIndex the index of the selected answer
+     * @return {@code true} if the selected answer is correct; {@code false} otherwise
+     * @throws IllegalStateException if {@code id} does not identify the pending effect
+     *                               or there is no pending question
+     * @throws IllegalArgumentException if {@code answerIndex} is outside the available
+     *                                  answer range
+     */
+    public boolean answerQuestion(long id, int answerIndex) {
+        requirePendingEffect(id);
+        if (pendingQuestion == null) {
+            throw new IllegalStateException("No pending question");
+        }
+        if (answerIndex < 0 || answerIndex >= pendingQuestion.answers().size()) {
+            throw new IllegalArgumentException("Got: " + answerIndex + ", valid indexes are between 0 and "
+                    + (pendingQuestion.answers().size() - 1));
+        }
+        boolean correct = answerIndex == pendingQuestion.correctIndex();
+        var steps = pendingQuestion.difficulty().steps();
+        var squares = correct ? steps : -steps;
+        resolveSquareEffect(id, squares);
+        return correct;
+    }
+
     private Optional<MoveCandidate> finishResolvedEffect(Piece affectedPiece, Optional<MoveCandidate> move,
                                                         List<Consumer<GameListener>> events) {
         pendingSquareEffect = null;
