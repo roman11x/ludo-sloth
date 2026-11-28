@@ -38,6 +38,7 @@ public final class Game {
     private Duration finalDuration;
     private final List<GameListener> listeners = new ArrayList<>();
     private PendingSquareEffect pendingSquareEffect;
+    private Question pendingQuestion;
     private PendingOpponentMove pendingOpponentMove;
     private long nextEffectId;
     private final Deque<NotificationBatch> notificationQueue = new ArrayDeque<>();
@@ -226,6 +227,7 @@ public final class Game {
             PendingSquareEffect request = pendingSquareEffect;
             if (destination.type() == SquareType.QUESTION) {
                 Question question = questionPicker.pickQuestion(destination.questionDifficulty());
+                pendingQuestion = question;
                 events.add(listener -> listener.questionRequired(request.id(), request.player(), piece, question));
             } else {
                 events.add(listener -> listener.squareEffectRequired(request));
@@ -453,6 +455,7 @@ public final class Game {
                                                         List<Consumer<GameListener>> events) {
         pendingSquareEffect = null;
         pendingOpponentMove = null;
+        pendingQuestion = null;
         turnManager.resumeAfterEffect();
         recordPlayerCompletion(pieceOwner(affectedPiece), events);
         if (move.isPresent()) continueAfterLanding(affectedPiece, events);
